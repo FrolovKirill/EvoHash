@@ -13,11 +13,13 @@
 git clone <your-repo-url> EvoHash
 cd EvoHash
 
-# Clone GigaEvo (required at runtime)
+# Clone GigaEvo into gigaevo-core/ and install as editable
+# (editable install is required: run_evohash.py calls gigaevo-core/run.py at runtime;
+#  pip install gigaevo alone is not enough because run.py and config/ are not published to PyPI)
 git clone https://github.com/gigaevo/gigaevo.git gigaevo-core
-
-# Install GigaEvo and EvoHash dependencies
 pip install -e gigaevo-core/
+
+# Install remaining EvoHash dependencies
 pip install imagehash pdqhash pillow numpy scipy tabulate
 ```
 
