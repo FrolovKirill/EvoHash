@@ -1,0 +1,55 @@
+# Cloned library — install as pip dependency instead
+gigaevo-core/
+
+# Claude internal docs (session notes, API summaries, etc.)
+.claude_notes/
+docs/internal/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+*.so
+.venv/
+venv/
+env/
+
+# Data — download separately via scripts/download_dataset.py
+data/imagenet_val/
+data/*.tar
+data/*.zip
+
+# Experiment outputs
+outputs/
+
+# Environment
+.env
+*.env
+
+# Hydra
+.hydra/
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Notebooks (checkpoints)
+.ipynb_checkpoints/
+
+# Weights & Biases
+wandb/
+
+# Redis dump
+dump.rdb

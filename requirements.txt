@@ -1,0 +1,29 @@
+# ── Core evolutionary framework ──────────────────────────────────────────────
+# Install from the cloned repo (development) or from PyPI once published:
+#   pip install -e gigaevo-core/       # local dev
+#   pip install gigaevo                # PyPI (when available)
+# GitHub: https://github.com/gigaevo/gigaevo
+gigaevo @ git+https://github.com/gigaevo/gigaevo.git
+
+# ── Perceptual hash functions ─────────────────────────────────────────────────
+imagehash>=4.3.1        # pHash via ImageHash library
+pdqhash>=0.2.0          # PDQ hash (Facebook/Meta)
+
+# ── Image processing ──────────────────────────────────────────────────────────
+Pillow>=10.0.0
+numpy>=2.0.0
+scipy>=1.11.0
+
+# ── Deep perceptual metrics ───────────────────────────────────────────────────
+torch>=2.0.0
+torchvision>=0.15.0
+lpips>=0.1.4            # Learned Perceptual Image Patch Similarity
+
+# ── Dataset ───────────────────────────────────────────────────────────────────
+datasets>=2.20.0        # HuggingFace datasets (ImageNet-1k access)
+requests>=2.28.0
+tqdm>=4.65.0
+
+# ── Utilities ─────────────────────────────────────────────────────────────────
+python-dotenv>=1.0.0
+tabulate>=0.9.0         # pretty-print evaluation tables
