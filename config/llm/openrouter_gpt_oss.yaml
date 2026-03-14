@@ -1,0 +1,17 @@
+# @package _global_
+
+# GPT-OSS 120B via OpenRouter
+# https://openrouter.ai/openai/gpt-oss-120b
+
+llm:
+  _target_: gigaevo.llm.models.MultiModelRouter
+  _convert_: all
+  models:
+    - _target_: langchain_openai.ChatOpenAI
+      model: openai/gpt-oss-120b
+      api_key: ${oc.env:OPENAI_API_KEY}
+      temperature: ${temperature}
+      max_tokens: ${max_tokens}
+      base_url: https://openrouter.ai/api/v1
+      request_timeout: ${request_timeout}
+  probabilities: [1.0]

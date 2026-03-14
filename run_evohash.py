@@ -201,9 +201,15 @@ def run(
 
     overrides = list(extra_overrides or [])
 
+    # EvoHash-specific LLM configs live in PROJECT_ROOT/config/llm/.
+    # Hydra's --config-dir prepends this path to the config search path,
+    # so our configs are found before gigaevo's built-in ones.
+    custom_config_dir = PROJECT_ROOT / "config"
+
     cmd = [
         sys.executable,
         str(GIGAEVO_DIR / "run.py"),
+        "--config-dir", str(custom_config_dir),
         f"problem.name={phf}",
         f"problem.dir={problem_dir}",
         f"llm={llm}",
