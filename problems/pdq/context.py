@@ -1,10 +1,5 @@
 """Runtime context for the PDQ collision attack problem."""
 
-from pathlib import Path
-
-_PROJECT_ROOT = Path(__file__).parent.parent.parent
-_DATA_DIR = _PROJECT_ROOT / "data" / "imagenet_val"
-
 N_PAIRS_EVAL = 10
 
 
@@ -20,16 +15,16 @@ def build_context() -> dict:
         - ``target_hashes`` : list of numpy arrays (256-bit PDQ hashes)
         - ``target_images`` : list of PIL Images (targets, for reference)
     """
-    import sys
-
-    sys.path.insert(0, str(_PROJECT_ROOT))
-
+    import evohash
+    from pathlib import Path
     from evohash.dataset import load_image_pairs
     from evohash.phf.pdq import PDQWrapper
 
+    data_dir = Path(evohash.__file__).parent.parent / "data" / "imagenet_val"
+
     phf = PDQWrapper()
 
-    pairs = load_image_pairs(_DATA_DIR, n_pairs=N_PAIRS_EVAL)
+    pairs = load_image_pairs(data_dir, n_pairs=N_PAIRS_EVAL)
     sources = [p[0] for p in pairs]
     targets = [p[1] for p in pairs]
     target_hashes = [phf.compute(img) for img in targets]

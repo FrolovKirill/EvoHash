@@ -92,11 +92,6 @@ Examples:
         action="store_true",
         help="Resume from existing Redis data instead of starting fresh.",
     )
-    p.add_argument(
-        "extra",
-        nargs=argparse.REMAINDER,
-        help="Additional Hydra overrides passed directly to gigaevo (e.g. temperature=0.9).",
-    )
     return p
 
 
@@ -153,6 +148,16 @@ def _build_env(base_env: dict[str, str]) -> dict[str, str]:
             file=sys.stderr,
         )
 
+    # Ensure the EvoHash project root is in PYTHONPATH so that gigaevo's
+    # exec_runner subprocesses (which inherit this env) can import the
+    # evohash package (evohash/phf/, evohash/dataset.py, etc.).
+    existing_pp = env.get("PYTHONPATH", "")
+    project_root_str = str(PROJECT_ROOT)
+    if existing_pp:
+        env["PYTHONPATH"] = project_root_str + os.pathsep + existing_pp
+    else:
+        env["PYTHONPATH"] = project_root_str
+
     return env
 
 
@@ -194,8 +199,7 @@ def run(
 
     problem_dir = str(PROBLEMS_DIR / phf)
 
-    # Strip leading '--' separator that argparse leaves in REMAINDER
-    overrides = [o for o in (extra_overrides or []) if o != "--"]
+    overrides = list(extra_overrides or [])
 
     cmd = [
         sys.executable,
@@ -227,7 +231,9 @@ def run(
 
 def main() -> None:
     parser = build_parser()
-    args = parser.parse_args()
+    # parse_known_args so that bare Hydra overrides (e.g. temperature=0.9) are
+    # passed through as extra_overrides without confusing argparse.
+    args, extra = parser.parse_known_args()
 
     exit_code = run(
         phf=args.phf,
@@ -235,7 +241,7 @@ def main() -> None:
         llm=args.llm,
         redis_db=args.redis_db,
         resume=args.resume,
-        extra_overrides=args.extra,
+        extra_overrides=extra,
     )
     sys.exit(exit_code)
 

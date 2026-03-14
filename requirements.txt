@@ -2,11 +2,11 @@
 # gigaevo must be installed as an editable local clone because run_evohash.py
 # calls gigaevo-core/run.py at runtime (run.py and config/ are not published to PyPI).
 #
-#   git clone https://github.com/gigaevo/gigaevo.git gigaevo-core
+#   git clone https://github.com/FusionBrainLab/gigaevo-core gigaevo-core
 #   pip install -e gigaevo-core/
 #
 # The line below is a fallback for environments where gigaevo-core/ is not present.
-# gigaevo @ git+https://github.com/gigaevo/gigaevo.git
+# gigaevo @ git+https://github.com/FusionBrainLab/gigaevo-core.git
 
 # ── Perceptual hash functions ─────────────────────────────────────────────────
 imagehash>=4.3.1        # pHash via ImageHash library

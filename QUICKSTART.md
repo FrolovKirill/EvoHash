@@ -16,7 +16,7 @@ cd EvoHash
 # Clone GigaEvo into gigaevo-core/ and install as editable
 # (editable install is required: run_evohash.py calls gigaevo-core/run.py at runtime;
 #  pip install gigaevo alone is not enough because run.py and config/ are not published to PyPI)
-git clone https://github.com/gigaevo/gigaevo.git gigaevo-core
+git clone https://github.com/FusionBrainLab/gigaevo-core gigaevo-core
 pip install -e gigaevo-core/
 
 # Install remaining EvoHash dependencies

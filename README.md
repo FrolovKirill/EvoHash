@@ -2,7 +2,7 @@
 
 **LLM-guided evolutionary discovery of collision attacks on perceptual hash functions.**
 
-EvoHash uses [GigaEvo](https://github.com/gigaevo/gigaevo) — an evolutionary programming framework powered by LLMs — to automatically discover black-box collision attacks against perceptual hash functions (PHFs) used in content moderation and digital rights management.
+EvoHash uses [GigaEvo](https://github.com/FusionBrainLab/gigaevo-core) — an evolutionary programming framework powered by LLMs — to automatically discover black-box collision attacks against perceptual hash functions (PHFs) used in content moderation and digital rights management.
 
 ## Overview
 
