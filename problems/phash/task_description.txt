@@ -1,0 +1,96 @@
+**TASK**: Evolve a Python attack strategy that generates hash collisions against pHash (perceptual hash).
+
+══════════════════════════════════════════════════════════════════════════════
+BACKGROUND
+══════════════════════════════════════════════════════════════════════════════
+
+pHash maps images to 64-bit hashes using the following steps:
+  1. Resize image to 32×32
+  2. Apply 2D DCT (Discrete Cosine Transform)
+  3. Keep top-left 8×8 block (64 low-frequency coefficients)
+  4. Threshold each coefficient against the mean → 64-bit binary hash
+
+Two images are a **collision** when their Hamming distance ≤ 12 bits (out of 64).
+
+GOAL: minimally perturb a source image so its pHash matches a target hash.
+
+══════════════════════════════════════════════════════════════════════════════
+PERFORMANCE METRIC
+══════════════════════════════════════════════════════════════════════════════
+
+  efficiency = ASR / (mean_L2 + ε)   ← MAXIMISE THIS
+
+  - ASR (Attack Success Rate): fraction of image pairs where hash_distance ≤ 12
+  - mean_L2: mean normalised L2 distortion = ‖δ‖₂ / √(H·W·C)
+  - Higher efficiency = more successful attacks with less visible distortion
+
+══════════════════════════════════════════════════════════════════════════════
+FUNCTION CONTRACT
+══════════════════════════════════════════════════════════════════════════════
+
+Your function MUST be named ``entrypoint`` and accept a single ``context`` dict:
+
+  def entrypoint(context: dict) -> dict:
+      ...
+
+Context keys:
+  - context["source_images"]  : list of PIL.Image.Image (RGB, 224×224)
+  - context["target_hashes"]  : list of imagehash.ImageHash objects
+  - context["hash_fn"]        : PHashWrapper with .compute(img) and .distance(h1, h2)
+  - context["threshold"]      : int = 12 (collision threshold)
+
+Return value must be a dict with:
+  - "attacked_images" : list[PIL.Image.Image]  — one perturbed image per source
+  - "metrics"         : list[dict]             — one metric dict per image:
+      {
+          "success"    : bool,  # True if hash distance ≤ threshold
+          "l2"         : float, # normalised L2 distance
+          "n_queries"  : int,   # number of hash evaluations used
+          "final_dist" : float, # final hash distance achieved (optional)
+      }
+
+══════════════════════════════════════════════════════════════════════════════
+ATTACK STRATEGIES TO EXPLORE
+══════════════════════════════════════════════════════════════════════════════
+
+pHash is computed over 8×8 DCT coefficients of a downsampled 32×32 image.
+Effective attacks often exploit this structure:
+
+  ► DCT-domain manipulation
+    Directly modify low-frequency DCT coefficients of the image to flip hash bits
+    towards the target.
+
+  ► Frequency-band injection
+    Add low-frequency sinusoidal patterns (invisible to humans) that alter
+    specific DCT basis functions.
+
+  ► Coordinate descent on bits
+    Identify which bits need flipping; greedily perturb pixel blocks that
+    maximally affect those DCT positions.
+
+  ► Gradient-free optimisation (NES / SimBa / CMA-ES)
+    Use black-box gradient estimation to minimise Hamming distance.
+
+  ► Patch-based attacks
+    Apply localised perturbations in regions that have the highest influence
+    on DCT coefficients (top-left of the 32×32 grid maps to global patterns).
+
+  ► Multi-scale strategy
+    Alternate between coarse (large σ) and fine (small σ) perturbations to
+    escape local minima.
+
+══════════════════════════════════════════════════════════════════════════════
+AVAILABLE IMPORTS
+══════════════════════════════════════════════════════════════════════════════
+
+Standard library and the following packages are available:
+  numpy, scipy, PIL (Pillow), imagehash
+
+Do NOT import torch, tensorflow, or other deep-learning frameworks — the
+evaluator runs in a CPU-only environment.
+
+══════════════════════════════════════════════════════════════════════════════
+CURRENT BEST PERFORMER
+══════════════════════════════════════════════════════════════════════════════
+
+[filled automatically by the evolution framework]
