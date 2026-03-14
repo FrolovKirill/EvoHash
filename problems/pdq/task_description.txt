@@ -1,0 +1,87 @@
+**TASK**: Evolve a Python attack strategy that generates hash collisions against PDQ (Photo DNA Quality hash).
+
+══════════════════════════════════════════════════════════════════════════════
+BACKGROUND
+══════════════════════════════════════════════════════════════════════════════
+
+PDQ is a perceptual hash developed by Facebook/Meta, designed for photo
+matching at scale.  It produces a 256-bit binary hash.
+
+PDQ computation pipeline:
+  1. Convert image to grayscale, resize to 64×64
+  2. Apply a 2D DCT (butteraugmented dithered variant)
+  3. Take the top-left 16×16 DCT coefficients (256 values)
+  4. Binarise against the median → 256-bit hash
+
+Two images are a **collision** when their Hamming distance ≤ 92 bits (out of 256).
+
+GOAL: minimally perturb a source image so its PDQ hash matches a target hash.
+
+══════════════════════════════════════════════════════════════════════════════
+PERFORMANCE METRIC
+══════════════════════════════════════════════════════════════════════════════
+
+  efficiency = ASR / (mean_L2 + ε)   ← MAXIMISE THIS
+
+  - ASR (Attack Success Rate): fraction of image pairs where hash_distance ≤ 92
+  - mean_L2: mean normalised L2 distortion = ‖δ‖₂ / √(H·W·C)
+
+══════════════════════════════════════════════════════════════════════════════
+FUNCTION CONTRACT
+══════════════════════════════════════════════════════════════════════════════
+
+  def entrypoint(context: dict) -> dict:
+
+Context keys:
+  - context["source_images"]  : list of PIL.Image.Image (RGB, 224×224)
+  - context["target_hashes"]  : list of numpy arrays, shape (256,), dtype bool/uint8
+  - context["hash_fn"]        : PDQWrapper with .compute(img) → np.ndarray and
+                                .distance(h1, h2) → float (Hamming distance)
+  - context["threshold"]      : int = 92
+
+Return value:
+  - "attacked_images" : list[PIL.Image.Image]
+  - "metrics"         : list[dict] each with:
+      {"success": bool, "l2": float, "n_queries": int, "final_dist": float}
+
+══════════════════════════════════════════════════════════════════════════════
+ATTACK STRATEGIES TO EXPLORE
+══════════════════════════════════════════════════════════════════════════════
+
+PDQ hashes 256 bits from a 16×16 DCT block.  The larger bit budget (256 vs 64
+for pHash) and higher threshold (92 vs 12) means attacks need to flip ~36% of
+bits — more than pHash but with a larger overall target surface.
+
+  ► Bit-flip targeting
+    Compute target bits that differ from the current hash; design perturbations
+    that flip those specific DCT coefficients.
+
+  ► Coordinate descent in pixel space
+    Greedily perturb individual pixels or small patches in directions that
+    reduce the Hamming distance.
+
+  ► NES/SimBa adapted for 256-bit space
+    Use antithetic sampling or DCT-basis steps with a larger step budget
+    proportional to the 256-bit hash size.
+
+  ► Frequency-band injection
+    PDQ processes a 64×64 grayscale version — low-spatial-frequency patterns
+    (period ≥ 8 pixels) affect 16×16 DCT coefficients most directly.
+
+  ► Momentum-based gradient descent
+    Accumulate velocity across iterations to escape flat regions of the
+    Hamming distance landscape.
+
+══════════════════════════════════════════════════════════════════════════════
+AVAILABLE IMPORTS
+══════════════════════════════════════════════════════════════════════════════
+
+Standard library and: numpy, scipy, PIL (Pillow), pdqhash
+
+Do NOT import torch, tensorflow, or other deep-learning frameworks.
+
+══════════════════════════════════════════════════════════════════════════════
+CURRENT BEST PERFORMER
+══════════════════════════════════════════════════════════════════════════════
+
+[filled automatically by the evolution framework]

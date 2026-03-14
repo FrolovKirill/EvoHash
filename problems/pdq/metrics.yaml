@@ -1,0 +1,55 @@
+specs:
+  efficiency:
+    description: "Attack efficiency: ASR / (mean L2 + eps). Higher is better."
+    decimals: 6
+    is_primary: true
+    higher_is_better: true
+    lower_bound: 0.0
+    upper_bound: 1000.0
+    include_in_prompts: true
+    significant_change: 1.0e-4
+    sentinel_value: -1000.0
+
+  is_valid:
+    description: "1.0 if the attack program ran without errors, else 0.0."
+    decimals: 0
+    is_primary: false
+    higher_is_better: true
+    lower_bound: 0.0
+    upper_bound: 1.0
+    include_in_prompts: true
+    significant_change: 1.0
+    sentinel_value: 0.0
+
+  asr:
+    description: "Attack Success Rate: fraction of images that achieved hash collision (dist ≤ 92)."
+    decimals: 4
+    is_primary: false
+    higher_is_better: true
+    lower_bound: 0.0
+    upper_bound: 1.0
+    include_in_prompts: true
+    significant_change: 0.01
+    sentinel_value: 0.0
+
+  l2:
+    description: "Mean normalised L2 pixel-space distortion (lower = less perceptible)."
+    decimals: 4
+    is_primary: false
+    higher_is_better: false
+    lower_bound: 0.0
+    upper_bound: 255.0
+    include_in_prompts: true
+    significant_change: 0.5
+    sentinel_value: 1000000.0
+
+  n_queries:
+    description: "Mean number of hash queries per attack image."
+    decimals: 0
+    is_primary: false
+    higher_is_better: false
+    lower_bound: 0.0
+    upper_bound: 100000.0
+    include_in_prompts: false
+    significant_change: 10.0
+    sentinel_value: 100000.0
