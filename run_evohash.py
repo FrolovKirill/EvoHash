@@ -108,11 +108,19 @@ def _check_prerequisites(phf: str) -> None:
     if not problem_dir.exists():
         raise SystemExit(f"Problem directory not found: {problem_dir}")
 
-    if phf in ("neuralhash", "photodna"):
+    if phf == "photodna":
         raise SystemExit(
-            f"'{phf}' is not yet implemented.  "
-            f"See evohash/phf/{phf}.py for details."
+            f"'photodna' is not yet implemented.  "
+            f"See evohash/phf/photodna.py for details."
         )
+
+    if phf == "neuralhash":
+        import platform
+        if platform.system() != "Darwin":
+            raise SystemExit(
+                "NeuralHash requires macOS (uses Apple Vision framework).\n"
+                "Install PyObjC: pip install pyobjc-framework-Vision pyobjc-core"
+            )
 
 
 def _build_env(base_env: dict[str, str]) -> dict[str, str]:
