@@ -1,0 +1,7 @@
+**TASK**: Evolve a Python attack strategy against PhotoDNA (Microsoft).
+
+TODO: This problem is not yet runnable — PhotoDNA API access is required.
+      See evohash/phf/photodna.py for details.
+
+PhotoDNA collision threshold: L1 distance ≤ 3855 (over 144-element float vector).
+Performance metric: efficiency = ASR / (mean_L2 + ε)

@@ -1,0 +1,7 @@
+**TASK**: Evolve a Python attack strategy against NeuralHash (Apple).
+
+TODO: This problem is not yet runnable — NeuralHash is not implemented.
+      See evohash/phf/neuralhash.py for details.
+
+NeuralHash collision threshold: ≤ 17 bits (out of 96).
+Performance metric: efficiency = ASR / (mean_L2 + ε)
