@@ -4,12 +4,8 @@
 
 - Python 3.12+
 - Redis server
-<<<<<<< HEAD
-- An [OpenRouter](https://openrouter.ai/) API key (for GPT OSS mutations)
-=======
-- An [OpenRouter](https://openrouter.ai/) API key (for OSS LLM mutations)
+- An [OpenRouter](https://openrouter.ai/) API key (for GPT-OSS-120B mutations)
 - **macOS** (required only for NeuralHash)
->>>>>>> 7cf9802633783b6613d5b3bdb7f010afae946c78
 
 ## 1. Clone and install
 
@@ -47,7 +43,7 @@ cp /System/Library/Frameworks/Vision.framework/Resources/neuralhash_128x96_seed1
 
 ```bash
 # Copy and edit the example env file
-cp .env.example .env   # or create .env manually
+cp .env.example .env
 ```
 
 `.env` contents:
@@ -92,22 +88,16 @@ redis-cli ping   # should print PONG
 # Evolve pHash attacks for 50 generations
 python run_evohash.py phash
 
-<<<<<<< HEAD
-# More options
-python run_evohash.py phash --max-generations 100
-python run_evohash.py pdq   --max-generations 50  --redis-db 1
-=======
 # Evolve PDQ attacks
-python run_evohash.py pdq --max-generations 100 --llm openrouter_bandit
+python run_evohash.py pdq --max-generations 100
 
 # Evolve NeuralHash attacks (macOS only)
 python run_evohash.py neuralhash --max-generations 50
 
 # Use a different Redis DB to run multiple PHFs in parallel
-python run_evohash.py phash   --redis-db 0
-python run_evohash.py pdq     --redis-db 1
+python run_evohash.py phash      --redis-db 0
+python run_evohash.py pdq        --redis-db 1
 python run_evohash.py neuralhash --redis-db 2
->>>>>>> 7cf9802633783b6613d5b3bdb7f010afae946c78
 
 # Resume a previous run
 python run_evohash.py phash --resume

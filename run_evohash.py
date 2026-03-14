@@ -101,7 +101,7 @@ def _check_prerequisites(phf: str) -> None:
         raise SystemExit(
             f"gigaevo-core not found at {GIGAEVO_DIR}.\n"
             "Clone it with:\n"
-            "  git clone https://github.com/gigaevo/gigaevo.git gigaevo-core"
+            "  git clone https://github.com/FusionBrainLab/gigaevo-core gigaevo-core"
         )
 
     problem_dir = PROBLEMS_DIR / phf
