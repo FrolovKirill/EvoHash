@@ -4,7 +4,7 @@
 
 - Python 3.12+
 - Redis server
-- An [OpenRouter](https://openrouter.ai/) API key (for OSS LLM mutations)
+- An [OpenRouter](https://openrouter.ai/) API key (for GPT OSS mutations)
 
 ## 1. Clone and install
 
@@ -78,7 +78,7 @@ redis-cli ping   # should print PONG
 python run_evohash.py phash
 
 # More options
-python run_evohash.py phash --max-generations 100 --llm openrouter_bandit
+python run_evohash.py phash --max-generations 100
 python run_evohash.py pdq   --max-generations 50  --redis-db 1
 
 # Resume a previous run

@@ -59,7 +59,7 @@ EvoHash/
 ## How It Works
 
 1. **Problem definition** — each PHF gets a `problems/<phf>/` directory with a fitness evaluator (`validate.py`) and seed attack programs (`initial_programs/`).
-2. **Evolution** — GigaEvo runs a MAP-Elites evolutionary loop: seed programs are mutated by an LLM (OpenRouter OSS models), evaluated by running them against the PHF, and the best strategies are stored and selected for future mutations.
+2. **Evolution** — GigaEvo runs a MAP-Elites evolutionary loop: seed programs are mutated by an LLM (GPT OSS 120B via OpenRouter), evaluated by running them against the PHF, and the best strategies are stored and selected for future mutations.
 3. **Fitness** — the evaluator re-verifies attack success via hash queries (not trusting the program's self-report) and returns `efficiency = ASR / (mean_L2 + ε)`.
 4. **Output** — evolved attack programs are stored in Redis; GigaEvo logs to `gigaevo-core/outputs/`.
 

@@ -45,7 +45,7 @@ PROBLEMS_DIR = PROJECT_ROOT / "problems"
 SUPPORTED_PHFS = ["phash", "pdq", "neuralhash", "photodna"]
 
 # Default LLM config (gigaevo ships openrouter_ensemble.yaml and openrouter_bandit.yaml)
-DEFAULT_LLM = "openrouter_ensemble"
+DEFAULT_LLM = "openrouter_gpt_oss"
 
 
 def build_parser() -> argparse.ArgumentParser:
