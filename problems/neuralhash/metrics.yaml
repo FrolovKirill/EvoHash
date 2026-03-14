@@ -1,5 +1,3 @@
-# TODO: NeuralHash metrics — mirrors phash/metrics.yaml with threshold=17
-# Uncomment when NeuralHash is implemented.
 specs:
   efficiency:
     description: "Attack efficiency: ASR / (mean L2 + eps). Higher is better."
