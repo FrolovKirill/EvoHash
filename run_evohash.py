@@ -135,7 +135,14 @@ def _build_env(base_env: dict[str, str]) -> dict[str, str]:
     if dotenv_path.exists():
         _load_dotenv(dotenv_path, env)
 
-    openrouter_key = env.get("OPENROUTER_API_KEY", "")
+    # Resolve OPENROUTER_API_KEY: .env value takes priority, then os.environ fallback.
+    # A value of "None" or empty string in .env is treated as unset.
+    openrouter_key = _nonempty(env.get("OPENROUTER_API_KEY"))
+    if openrouter_key is None:
+        openrouter_key = _nonempty(os.environ.get("OPENROUTER_API_KEY"))
+        if openrouter_key:
+            env["OPENROUTER_API_KEY"] = openrouter_key
+
     if openrouter_key and not env.get("OPENAI_API_KEY"):
         env["OPENAI_API_KEY"] = openrouter_key
     elif not env.get("OPENAI_API_KEY"):
@@ -147,6 +154,13 @@ def _build_env(base_env: dict[str, str]) -> dict[str, str]:
         )
 
     return env
+
+
+def _nonempty(value: str | None) -> str | None:
+    """Return *value* if it is a non-empty string that is not literally 'None', else None."""
+    if not value or value.strip().lower() == "none":
+        return None
+    return value
 
 
 def _load_dotenv(path: Path, env: dict[str, str]) -> None:
