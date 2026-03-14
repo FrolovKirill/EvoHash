@@ -16,12 +16,29 @@ where **ASR** is the fraction of successful collisions and **mean_L2** is the av
 
 ## Supported PHFs
 
-| PHF        | Hash size | Collision threshold | Status          |
-|------------|-----------|---------------------|-----------------|
-| pHash      | 64 bits   | Hamming ≤ 12        | ✅ Implemented  |
-| PDQ        | 256 bits  | Hamming ≤ 92        | ✅ Implemented  |
-| NeuralHash | 96 bits   | Hamming ≤ 17        | 🚧 Stub (Apple proprietary) |
-| PhotoDNA   | 144 floats | L1 ≤ 3855          | 🚧 Stub (Microsoft proprietary) |
+| PHF        | Hash size   | Collision threshold | Status                                      |
+|------------|-------------|---------------------|---------------------------------------------|
+| pHash      | 64 bits     | Hamming ≤ 12        | ✅ Implemented                              |
+| PDQ        | 256 bits    | Hamming ≤ 92        | ✅ Implemented                              |
+| NeuralHash | 96 bits     | Hamming ≤ 17        | ✅ Implemented (macOS via Vision framework) |
+| PhotoDNA   | 144 floats  | L1 ≤ 3855           | 🚧 Stub (Microsoft proprietary API)         |
+
+## Baselines
+
+All 8 baselines from the paper are implemented for pHash, PDQ, and NeuralHash:
+
+| Attack | Description |
+|--------|-------------|
+| **random_noise** | i.i.d. Gaussian perturbations, keep the best sample |
+| **NES** | Natural Evolution Strategy with antithetic sampling |
+| **SimBa** | Simple Black-box Adversarial attacks in DCT/pixel basis |
+| **ZO-Sign-SGD** | Zeroth-order sign gradient descent |
+| **HSJA** | HopSkipJump — decision-boundary walk from target image |
+| **NES+HSJA** | HSJA initialisation → NES refinement |
+| **SimBa+HSJA** | HSJA initialisation → SimBa DCT-basis refinement |
+| **ZO-Sign-SGD+HSJA** | HSJA initialisation → ZO-Sign-SGD refinement |
+| **Prokos** | Frequency-targeted DCT-domain gradient attack |
+| **AtkScopes** | Multi-scale patch sensitivity attack |
 
 ## Project Structure
 
@@ -34,10 +51,10 @@ EvoHash/
 │   │   ├── base.py             # Abstract PHFWrapper interface
 │   │   ├── phash.py            # pHash (imagehash)
 │   │   ├── pdq.py              # PDQ (pdqhash)
-│   │   ├── neuralhash.py       # TODO stub
-│   │   └── photodna.py         # TODO stub
+│   │   ├── neuralhash.py       # NeuralHash (macOS Vision via PyObjC)
+│   │   └── photodna.py         # TODO stub (Microsoft API)
 │   ├── dataset.py              # ImageNet Val image pair loader
-│   └── evaluation.py           # ASR, L2, LPIPS, efficiency metrics
+│   └── evaluation.py           # ASR, L2, LPIPS, Efficiency, Transferability
 ├── problems/
 │   ├── phash/                  # gigaevo problem definition for pHash
 │   │   ├── context.py          # Runtime context (images + hash fn)
@@ -45,11 +62,12 @@ EvoHash/
 │   │   ├── metrics.yaml        # Metric specs (efficiency as primary)
 │   │   ├── task_description.txt # LLM prompt for mutation
 │   │   ├── helper.py           # Shared attack utilities
-│   │   └── initial_programs/   # Seed strategies
-│   │       ├── random_noise.py # Gaussian noise baseline
-│   │       ├── nes_attack.py   # Natural Evolution Strategy
-│   │       └── simba_attack.py # SimBa (DCT-basis coordinate descent)
-│   └── pdq/                    # Same structure for PDQ
+│   │   └── initial_programs/   # 10 seed attack strategies
+│   ├── pdq/                    # Same structure for PDQ
+│   └── neuralhash/             # Same structure for NeuralHash (macOS only)
+├── config/
+│   └── llm/
+│       └── openrouter_gpt_oss.yaml  # GPT-OSS 120B via OpenRouter
 ├── scripts/
 │   ├── download_dataset.py     # Download ImageNet Val subset
 │   └── evaluate.py             # Full benchmark evaluation
@@ -77,19 +95,12 @@ See [QUICKSTART.md](QUICKSTART.md).
 | **LPIPS** | Learned Perceptual Image Patch Similarity (AlexNet) |
 | **Queries** | Mean number of hash evaluations per attack |
 | **Time** | Mean wall-clock seconds per attack |
-| **Transferability** | Success rate of pHash-evolved attacks applied to PDQ (and vice versa) |
-
-## Baselines
-
-The initial seed programs implement classical gradient-free attacks:
-- **Random noise** — i.i.d. Gaussian perturbations, keep the best sample
-- **NES** — Natural Evolution Strategy with antithetic sampling
-- **SimBa** — Simple Black-box Adversarial attacks in DCT/pixel-block basis
+| **Transferability** | Success rate of attacks evolved for one PHF applied to another |
 
 ## Limitations
 
-- **NeuralHash**: Apple's model weights are not publicly available. See `evohash/phf/neuralhash.py`.
 - **PhotoDNA**: Requires a Microsoft API licence. See `evohash/phf/photodna.py`.
+- **NeuralHash**: macOS only (uses Apple Vision framework via PyObjC). Requires `pip install pyobjc-framework-Vision pyobjc-core` and copying `neuralhash_128x96_seed1.dat` from `/System/Library/Frameworks/Vision.framework/Resources/`.
 - **GigaChat-2-Max**: Not yet integrated (not available on OpenRouter).
 - **Dataset**: ImageNet-1k requires a HuggingFace account and acceptance of the dataset licence. The download script falls back to Tiny-ImageNet or synthetic images.
 
