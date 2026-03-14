@@ -1,7 +1,14 @@
-**TASK**: Evolve a Python attack strategy against NeuralHash (Apple).
+**TASK**: Evolve a Python attack strategy against Apple NeuralHash.
 
-TODO: This problem is not yet runnable — NeuralHash is not implemented.
-      See evohash/phf/neuralhash.py for details.
+NeuralHash is a 96-bit perceptual hash based on a neural network.
+It is computed via the macOS Vision framework (VNCreateNeuralHashprintRequest).
 
-NeuralHash collision threshold: ≤ 17 bits (out of 96).
+NeuralHash collision threshold: Hamming distance ≤ 17 bits (out of 96).
 Performance metric: efficiency = ASR / (mean_L2 + ε)
+
+The hash_fn.compute(image) returns a numpy array of 96 bits (uint8, values 0/1).
+The hash_fn.distance(h1, h2) returns the Hamming distance (integer in [0, 96]).
+A collision is achieved when distance ≤ 17.
+
+Note: each hash query involves a macOS Vision framework call (~50-100ms).
+Minimise the number of queries for practical efficiency.

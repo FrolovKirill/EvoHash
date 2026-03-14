@@ -180,7 +180,7 @@ def main() -> None:
     parser.add_argument(
         "--phf",
         required=True,
-        choices=["phash", "pdq"],
+        choices=["phash", "pdq", "neuralhash"],
         help="Target PHF.",
     )
     parser.add_argument(
