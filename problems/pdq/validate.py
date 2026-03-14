@@ -15,7 +15,7 @@ _SENTINEL = {
 }
 
 
-def validate(data: dict, context: dict) -> dict:
+def validate(context: dict, data: dict) -> dict:
     """
     Evaluate PDQ attack results and return fitness metrics.
 

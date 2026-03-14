@@ -21,19 +21,19 @@ _SENTINEL = {
 }
 
 
-def validate(data: dict, context: dict) -> dict:
+def validate(context: dict, data: dict) -> dict:
     """
     Evaluate pHash attack results and return fitness metrics.
 
     Args:
+        context: Dict produced by ``context.py::build_context()``.
+                 Gigaevo passes context as the first argument.
         data: Return value of ``entrypoint(context)`` from the evolved program.
               Expected keys:
               - ``attacked_images``: list of PIL.Image (perturbed sources)
               - ``metrics``: list of per-image dicts with keys
                   ``success`` (bool), ``l2`` (float), ``n_queries`` (int),
                   ``final_dist`` (float, optional)
-
-        context: Dict produced by ``context.py::build_context()``.
 
     Returns:
         Dict with metrics consumed by gigaevo:
