@@ -5,6 +5,7 @@
 - Python 3.12+
 - Redis server
 - An [OpenRouter](https://openrouter.ai/) API key (for OSS LLM mutations)
+- **macOS** (required only for NeuralHash)
 
 ## 1. Clone and install
 
@@ -19,13 +20,23 @@ cd EvoHash
 git clone https://github.com/FusionBrainLab/gigaevo-core gigaevo-core
 pip install -e gigaevo-core/
 
-# Install remaining EvoHash dependencies
+# Install EvoHash dependencies
 pip install imagehash pdqhash pillow numpy scipy tabulate
 ```
 
 For LPIPS (optional, used in full evaluation):
 ```bash
 pip install torch torchvision lpips
+```
+
+For **NeuralHash** (macOS only):
+```bash
+pip install pyobjc-framework-Vision pyobjc-core
+
+# Copy seed matrix from macOS system
+mkdir -p data/neuralhash_model
+cp /System/Library/Frameworks/Vision.framework/Resources/neuralhash_128x96_seed1.dat \
+   data/neuralhash_model/seed1.dat
 ```
 
 ## 2. Configure environment
@@ -77,9 +88,16 @@ redis-cli ping   # should print PONG
 # Evolve pHash attacks for 50 generations
 python run_evohash.py phash
 
-# More options
-python run_evohash.py phash --max-generations 100 --llm openrouter_bandit
-python run_evohash.py pdq   --max-generations 50  --redis-db 1
+# Evolve PDQ attacks
+python run_evohash.py pdq --max-generations 100 --llm openrouter_bandit
+
+# Evolve NeuralHash attacks (macOS only)
+python run_evohash.py neuralhash --max-generations 50
+
+# Use a different Redis DB to run multiple PHFs in parallel
+python run_evohash.py phash   --redis-db 0
+python run_evohash.py pdq     --redis-db 1
+python run_evohash.py neuralhash --redis-db 2
 
 # Resume a previous run
 python run_evohash.py phash --resume
@@ -92,6 +110,8 @@ Outputs are written to `gigaevo-core/outputs/YYYY-MM-DD/HH-MM-SS/`.
 Benchmark all seed strategies (no evolution required):
 ```bash
 python scripts/evaluate.py --phf phash --all-seeds
+python scripts/evaluate.py --phf pdq --all-seeds
+python scripts/evaluate.py --phf neuralhash --all-seeds   # macOS only
 ```
 
 Evaluate a specific program:
@@ -108,11 +128,17 @@ python scripts/evaluate.py --phf phash --all-seeds --output-csv results_phash.cs
 
 Expected output format:
 ```
-| Program      | PHF   |  ASR | mean L2 | Efficiency | Queries | LPIPS | Time (s) |
-|--------------|-------|------|---------|------------|---------|-------|----------|
-| random_noise | phash | 0.00 |    3.21 |     0.0000 |     201 | 0.042 |     1.23 |
-| nes_attack   | phash | 0.10 |    8.47 |     0.0118 |    3001 | 0.089 |    12.50 |
-| simba_attack | phash | 0.20 |   12.31 |     0.0163 |    2401 | 0.127 |    14.80 |
+| Program              | PHF   |  ASR | mean L2 | Efficiency | Queries | LPIPS | Time (s) |
+|----------------------|-------|------|---------|------------|---------|-------|----------|
+| random_noise         | phash | 0.00 |    3.21 |     0.0000 |     201 | 0.042 |     1.23 |
+| nes_attack           | phash | 0.10 |    8.47 |     0.0118 |    3001 | 0.089 |    12.50 |
+| simba_attack         | phash | 0.20 |   12.31 |     0.0163 |    2401 | 0.127 |    14.80 |
+| zo_signsgd_attack    | phash | 0.15 |    7.20 |     0.0208 |    6151 | 0.073 |    18.40 |
+| hsja_attack          | phash | 0.80 |   36.20 |     0.0221 |    1615 | 0.312 |     9.80 |
+| nes_hsja_attack      | phash | 0.85 |   36.75 |     0.0231 |    3358 | 0.320 |    22.10 |
+| simba_hsja_attack    | phash | 0.80 |   39.22 |     0.0204 |    1123 | 0.335 |    15.60 |
+| prokos_attack        | phash | 0.05 |    0.34 |     0.1471 |    6121 | 0.012 |    31.20 |
+| atkscopes_attack     | phash | 0.02 |    0.11 |     0.1818 |   61673 | 0.004 |   190.50 |
 ```
 
 ## Typical Workflow
@@ -134,6 +160,12 @@ python tools/redis2pd.py   # export all programs to CSV/Parquet
 
 **`FileNotFoundError: data/imagenet_val/ not found`**
 → Run `python scripts/download_dataset.py` first.
+
+**`FileNotFoundError: data/neuralhash_model/seed1.dat`**
+→ Copy the seed file from macOS Vision framework (see Step 1, NeuralHash section).
+
+**`ImportError: No module named 'Vision'`**
+→ Install PyObjC: `pip install pyobjc-framework-Vision pyobjc-core` (macOS only).
 
 **`Redis database is not empty`**
 → Either flush it (`redis-cli -n 0 FLUSHDB`) or use `--resume` to continue, or use a different DB (`--redis-db 1`).
