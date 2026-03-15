@@ -66,9 +66,11 @@ EvoHash/
 │   │   └── initial_programs/   # 10 seed attack strategies
 │   ├── pdq/                    # Same structure for PDQ
 │   └── neuralhash/             # Same structure for NeuralHash (macOS only)
+├── proxy/
+│   └── openrouter_proxy.py         # Structured-output fixup proxy for OpenRouter
 ├── config/
 │   └── llm/
-│       └── openrouter_gpt_oss.yaml  # GPT-OSS 120B via OpenRouter
+│       └── openrouter_gpt_oss.yaml  # GPT-OSS 120B via OpenRouter (through proxy)
 ├── scripts/
 │   ├── download_dataset.py     # Download ImageNet Val subset
 │   ├── evaluate.py             # Full benchmark evaluation
@@ -79,7 +81,7 @@ EvoHash/
 ## How It Works
 
 1. **Problem definition** — each PHF gets a `problems/<phf>/` directory with a fitness evaluator (`validate.py`) and seed attack programs (`initial_programs/`).
-2. **Evolution** — GigaEvo runs a MAP-Elites evolutionary loop: seed programs are mutated by an LLM (GPT OSS 120B via OpenRouter), evaluated by running them against the PHF, and the best strategies are stored and selected for future mutations.
+2. **Evolution** — GigaEvo runs a MAP-Elites evolutionary loop: seed programs are mutated by an LLM (GPT OSS 120B via OpenRouter), evaluated by running them against the PHF, and the best strategies are stored and selected for future mutations. A local proxy (`proxy/openrouter_proxy.py`) automatically fixes structured-output format mismatches between OpenRouter models and GigaEvo's pydantic schemas.
 3. **Fitness** — the evaluator re-verifies attack success via hash queries (not trusting the program's self-report) and returns `efficiency = ASR / (mean_L2 + ε)`.
 4. **Output** — evolved attack programs are stored in Redis; metrics and image grids are logged to [Weights & Biases](https://wandb.ai/) in real time. Use `scripts/show_best.py` to export top programs from Redis.
 

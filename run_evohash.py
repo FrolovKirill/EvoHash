@@ -204,6 +204,42 @@ def _load_dotenv(path: Path, env: dict[str, str]) -> None:
                 env[key] = value
 
 
+_PROXY_PORT = 8100
+_PROXY_CONFIGS = {"openrouter_gpt_oss"}  # LLM configs that route through the proxy
+
+
+def _maybe_start_proxy(llm: str) -> subprocess.Popen | None:
+    """Start the OpenRouter fixup proxy if needed, wait until it's ready."""
+    if llm not in _PROXY_CONFIGS:
+        return None
+
+    proxy_script = PROJECT_ROOT / "proxy" / "openrouter_proxy.py"
+    if not proxy_script.exists():
+        print(f"WARNING: proxy script not found at {proxy_script}", file=sys.stderr)
+        return None
+
+    proc = subprocess.Popen(
+        [sys.executable, str(proxy_script), "--port", str(_PROXY_PORT)],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+    )
+
+    # Wait for proxy to be ready (up to 5 seconds)
+    import time
+    import urllib.request
+    for _ in range(50):
+        try:
+            urllib.request.urlopen(f"http://localhost:{_PROXY_PORT}/", timeout=0.5)
+            break
+        except Exception:
+            time.sleep(0.1)
+            if proc.poll() is not None:
+                stderr = proc.stderr.read().decode() if proc.stderr else ""
+                raise RuntimeError(f"Proxy failed to start:\n{stderr}")
+
+    return proc
+
+
 def run(
     phf: str,
     max_generations: int = 50,
@@ -245,18 +281,28 @@ def run(
     base["_EVOHASH_PHF"] = phf
     env = _build_env(base)
 
+    # Start the OpenRouter fixup proxy if the LLM config uses it
+    proxy_proc = _maybe_start_proxy(llm)
+
     print(f"EvoHash: running evolution for '{phf}'")
     print(f"  Problem dir : {problem_dir}")
     print(f"  LLM config  : {llm}")
     print(f"  Generations : {max_generations}")
     print(f"  Redis DB    : {redis_db}")
     print(f"  Resume      : {resume}")
+    if proxy_proc:
+        print(f"  Proxy       : localhost:{_PROXY_PORT} (auto-started)")
     if overrides:
         print(f"  Extra       : {overrides}")
     print()
 
-    result = subprocess.run(cmd, cwd=str(GIGAEVO_DIR), env=env)
-    return result.returncode
+    try:
+        result = subprocess.run(cmd, cwd=str(GIGAEVO_DIR), env=env)
+        return result.returncode
+    finally:
+        if proxy_proc:
+            proxy_proc.terminate()
+            proxy_proc.wait(timeout=5)
 
 
 def main() -> None:

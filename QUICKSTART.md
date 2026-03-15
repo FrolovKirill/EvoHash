@@ -111,6 +111,10 @@ python run_evohash.py phash --resume
 W&B logs metrics and image grids in real time — a run URL is printed at startup.
 Outputs are also written to `gigaevo-core/outputs/YYYY-MM-DD/HH-MM-SS/`.
 
+> **Note:** `run_evohash.py` automatically starts a local proxy (`proxy/openrouter_proxy.py`)
+> that fixes structured-output JSON responses from OpenRouter. The proxy runs on port 8100
+> and stops when evolution finishes. No manual setup is needed.
+
 ## 6. Evaluate results
 
 Benchmark all seed strategies (no evolution required):
