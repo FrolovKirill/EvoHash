@@ -88,6 +88,39 @@ def init_run(phf_name: str, threshold: int, n_pairs: int) -> str:
     return run.id
 
 
+def log_initial_programs(program_dir: Any) -> None:
+    """Log all *.py files in program_dir/initial_programs/ as a W&B artifact.
+
+    Call once from build_context() so all seed attack files are visible in W&B
+    under the Artifacts tab.  Never raises.
+    """
+    try:
+        import wandb
+        from pathlib import Path
+
+        if wandb.run is None:
+            return
+
+        initial_dir = Path(program_dir) / "initial_programs"
+        if not initial_dir.exists():
+            return
+
+        py_files = sorted(initial_dir.glob("*.py"))
+        if not py_files:
+            return
+
+        artifact = wandb.Artifact(
+            name=f"initial_programs_{wandb.run.id}",
+            type="code",
+            description="Seed attack programs for EvoHash evolution",
+        )
+        for f in py_files:
+            artifact.add_file(str(f), name=f.name)
+        wandb.run.log_artifact(artifact)
+    except Exception:
+        pass
+
+
 def log_iteration(
     report_dir: Any,          # kept for API compat, ignored
     phf_name: str,
@@ -125,6 +158,16 @@ def _log(phf_name: str, metrics: dict, context: dict, data: dict) -> None:
         "l2":         metrics.get("l2", 0),
         "n_queries":  metrics.get("n_queries", 0),
     }
+
+    # ── Program code panel ───────────────────────────────────────────────────
+    program_code = (data or {}).get("program_code")
+    if program_code:
+        html = (
+            "<html><body style='background:#0d1117;color:#c9d1d9'>"
+            f"<pre style='font-size:12px;padding:16px'>{program_code}</pre>"
+            "</body></html>"
+        )
+        log["program_code"] = wandb.Html(html)
 
     # ── Per-pair distances table ─────────────────────────────────────────────
     n_pairs = len(sources)
