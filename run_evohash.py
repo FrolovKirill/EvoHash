@@ -156,6 +156,20 @@ def _build_env(base_env: dict[str, str]) -> dict[str, str]:
             file=sys.stderr,
         )
 
+    # W&B: pass key/project and generate a single stable run ID for the whole experiment.
+    for wandb_var in ("WANDB_API_KEY", "WANDB_PROJECT", "WANDB_ENTITY"):
+        val = _nonempty(env.get(wandb_var))
+        if val is None:
+            val = _nonempty(os.environ.get(wandb_var))
+        if val:
+            env[wandb_var] = val
+
+    if _nonempty(env.get("WANDB_API_KEY")):
+        import uuid
+        import time
+        phf_name = env.get("_EVOHASH_PHF", "run")
+        env["WANDB_RUN_ID"] = f"{phf_name}-{time.strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:6]}"
+
     # Ensure the EvoHash project root is in PYTHONPATH so that gigaevo's
     # exec_runner subprocesses (which inherit this env) can import the
     # evohash package (evohash/phf/, evohash/dataset.py, etc.).
@@ -227,7 +241,9 @@ def run(
         f"redis.resume={str(resume).lower()}",
     ] + overrides
 
-    env = _build_env(dict(os.environ))
+    base = dict(os.environ)
+    base["_EVOHASH_PHF"] = phf
+    env = _build_env(base)
 
     print(f"EvoHash: running evolution for '{phf}'")
     print(f"  Problem dir : {problem_dir}")

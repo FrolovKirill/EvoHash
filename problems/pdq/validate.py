@@ -76,10 +76,18 @@ def validate(context: dict, data: dict) -> dict:
     mean_queries = float(np.mean(query_counts))
     efficiency = asr / (mean_l2 + 1e-6)
 
-    return {
+    result = {
         "is_valid": 1.0,
         "efficiency": efficiency,
         "asr": asr,
         "l2": mean_l2,
         "n_queries": mean_queries,
     }
+
+    try:
+        from evohash.reporter import log_iteration
+        log_iteration(context.get("_report_dir"), context.get("_phf_name", "pdq"), result, context, data)
+    except Exception:
+        pass
+
+    return result

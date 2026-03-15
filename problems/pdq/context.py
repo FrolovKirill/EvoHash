@@ -29,10 +29,15 @@ def build_context() -> dict:
     targets = [p[1] for p in pairs]
     target_hashes = [phf.compute(img) for img in targets]
 
+    from evohash.reporter import init_run
+    init_run("pdq", phf.threshold, N_PAIRS_EVAL)
+
     return {
         "hash_fn": phf,
         "threshold": phf.threshold,
         "source_images": sources,
         "target_hashes": target_hashes,
         "target_images": targets,
+        "_report_dir": None,
+        "_phf_name": "pdq",
     }
