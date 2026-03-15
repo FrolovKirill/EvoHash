@@ -1,7 +1,11 @@
 # @package _global_
 
-# GPT-OSS 120B via OpenRouter
+# GPT-OSS 120B via OpenRouter (through local fixup proxy)
 # https://openrouter.ai/openai/gpt-oss-120b
+#
+# Requires: python proxy/openrouter_proxy.py  (runs on port 8100)
+# The proxy fixes structured-output responses where the model returns
+# a bare JSON list instead of the expected object wrapper.
 
 llm:
   _target_: gigaevo.llm.models.MultiModelRouter
@@ -12,6 +16,6 @@ llm:
       api_key: ${oc.env:OPENAI_API_KEY}
       temperature: ${temperature}
       max_tokens: ${max_tokens}
-      base_url: https://openrouter.ai/api/v1
+      base_url: http://localhost:8100/api/v1
       request_timeout: ${request_timeout}
   probabilities: [1.0]
