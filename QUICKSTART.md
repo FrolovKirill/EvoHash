@@ -168,6 +168,40 @@ python scripts/show_best.py phash --top 10 --save
 python scripts/show_best.py phash --metric asr
 ```
 
+### Live monitoring during evolution
+
+To watch the best programs update in real time while evolution is running,
+open a second terminal and run:
+
+```bash
+# refresh every 30s (default) — prints to terminal AND logs to W&B
+python scripts/show_best.py phash --watch
+
+# refresh every 10s
+python scripts/show_best.py phash --watch 10
+
+# terminal only, no W&B
+python scripts/show_best.py phash --watch 30 --no-wandb
+```
+
+So the typical two-terminal setup during a run is:
+
+```
+Terminal 1:  python run_evohash.py phash --max-generations 100
+Terminal 2:  python scripts/show_best.py phash --watch 30
+```
+
+In W&B you will see a separate **monitor** run (grouped under the same PHF)
+with the following panels updated every refresh cycle:
+
+| W&B key | What it shows |
+|---|---|
+| `monitor/best_program` | Code of the current best program (HTML) |
+| `monitor/best_efficiency` | Efficiency of the best program over time |
+| `monitor/best_asr` | ASR of the best program over time |
+| `monitor/best_l2` | L2 of the best program over time |
+| `monitor/top3` | Table with top-3 programs and their metrics |
+
 ## Troubleshooting
 
 **`FileNotFoundError: data/imagenet_val/ not found`**
