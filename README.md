@@ -54,7 +54,8 @@ EvoHash/
 │   │   ├── neuralhash.py       # NeuralHash (macOS Vision via PyObjC)
 │   │   └── photodna.py         # TODO stub (Microsoft API)
 │   ├── dataset.py              # ImageNet Val image pair loader
-│   └── evaluation.py           # ASR, L2, LPIPS, Efficiency, Transferability
+│   ├── evaluation.py           # ASR, L2, LPIPS, Efficiency, Transferability
+│   └── reporter.py             # W&B experiment tracking (metrics + image grids)
 ├── problems/
 │   ├── phash/                  # gigaevo problem definition for pHash
 │   │   ├── context.py          # Runtime context (images + hash fn)
@@ -70,7 +71,8 @@ EvoHash/
 │       └── openrouter_gpt_oss.yaml  # GPT-OSS 120B via OpenRouter
 ├── scripts/
 │   ├── download_dataset.py     # Download ImageNet Val subset
-│   └── evaluate.py             # Full benchmark evaluation
+│   ├── evaluate.py             # Full benchmark evaluation
+│   └── show_best.py            # Dump best evolved programs from Redis
 └── data/imagenet_val/          # Images (gitignored, populated by download script)
 ```
 
@@ -79,7 +81,7 @@ EvoHash/
 1. **Problem definition** — each PHF gets a `problems/<phf>/` directory with a fitness evaluator (`validate.py`) and seed attack programs (`initial_programs/`).
 2. **Evolution** — GigaEvo runs a MAP-Elites evolutionary loop: seed programs are mutated by an LLM (GPT OSS 120B via OpenRouter), evaluated by running them against the PHF, and the best strategies are stored and selected for future mutations.
 3. **Fitness** — the evaluator re-verifies attack success via hash queries (not trusting the program's self-report) and returns `efficiency = ASR / (mean_L2 + ε)`.
-4. **Output** — evolved attack programs are stored in Redis; GigaEvo logs to `gigaevo-core/outputs/`.
+4. **Output** — evolved attack programs are stored in Redis; metrics and image grids are logged to [Weights & Biases](https://wandb.ai/) in real time. Use `scripts/show_best.py` to export top programs from Redis.
 
 ## Quick Start
 

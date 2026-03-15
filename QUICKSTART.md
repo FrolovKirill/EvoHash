@@ -5,6 +5,7 @@
 - Python 3.12+
 - Redis server
 - An [OpenRouter](https://openrouter.ai/) API key (for GPT-OSS-120B mutations)
+- A [Weights & Biases](https://wandb.ai/) API key (for experiment tracking)
 - **macOS** (required only for NeuralHash)
 
 ## 1. Clone and install
@@ -21,7 +22,7 @@ git clone https://github.com/FusionBrainLab/gigaevo-core gigaevo-core
 pip install -e gigaevo-core/
 
 # Install EvoHash dependencies
-pip install imagehash pdqhash pillow numpy scipy tabulate
+pip install -r requirements.txt
 ```
 
 For LPIPS (optional, used in full evaluation):
@@ -48,11 +49,14 @@ cp .env.example .env
 
 `.env` contents:
 ```
-OPENROUTER_API_KEY=sk-or-...
+OPENROUTER_API_KEY=sk-or-...   # https://openrouter.ai/
+WANDB_API_KEY=                 # https://wandb.ai/authorize
+WANDB_PROJECT=evohash
 ```
 
 > **Note:** `run_evohash.py` automatically maps `OPENROUTER_API_KEY → OPENAI_API_KEY`
 > so GigaEvo's LLM configs work without modification.
+> All keys are read from `.env` automatically — no `wandb login` needed.
 
 ## 3. Download dataset
 
@@ -88,8 +92,9 @@ redis-cli ping   # should print PONG
 # Evolve pHash attacks for 50 generations
 python run_evohash.py phash
 
-# Evolve PDQ attacks
-python run_evohash.py pdq --max-generations 100
+# More options
+python run_evohash.py phash --max-generations 100
+python run_evohash.py pdq   --max-generations 50  --redis-db 1
 
 # Evolve NeuralHash attacks (macOS only)
 python run_evohash.py neuralhash --max-generations 50
@@ -103,7 +108,8 @@ python run_evohash.py neuralhash --redis-db 2
 python run_evohash.py phash --resume
 ```
 
-Outputs are written to `gigaevo-core/outputs/YYYY-MM-DD/HH-MM-SS/`.
+W&B logs metrics and image grids in real time — a run URL is printed at startup.
+Outputs are also written to `gigaevo-core/outputs/YYYY-MM-DD/HH-MM-SS/`.
 
 ## 6. Evaluate results
 
@@ -150,10 +156,16 @@ download data → start Redis → run evolution (hours) → evaluate evolved pro
                           (best evolved programs stored in Redis)
 ```
 
-After evolution, export programs from Redis to files using GigaEvo's built-in tools:
+After evolution, view the best programs directly from Redis:
 ```bash
-cd gigaevo-core
-python tools/redis2pd.py   # export all programs to CSV/Parquet
+# print top-5 by efficiency
+python scripts/show_best.py phash
+
+# save top-10 code to out/best_phash/*.py
+python scripts/show_best.py phash --top 10 --save
+
+# sort by ASR instead
+python scripts/show_best.py phash --metric asr
 ```
 
 ## Troubleshooting
@@ -171,7 +183,10 @@ python tools/redis2pd.py   # export all programs to CSV/Parquet
 → Either flush it (`redis-cli -n 0 FLUSHDB`) or use `--resume` to continue, or use a different DB (`--redis-db 1`).
 
 **`OPENAI_API_KEY not set` warning**
-→ Set `OPENROUTER_API_KEY` in your environment or `.env` file.
+→ Set `OPENROUTER_API_KEY` in your `.env` file.
+
+**W&B run not appearing**
+→ Check `WANDB_API_KEY` is set in `.env`. Get a key at https://wandb.ai/authorize.
 
 **`gigaevo-core not found`**
 → Clone the repo into `gigaevo-core/` (see Step 1).

@@ -21,6 +21,8 @@ def build_context() -> dict:
         - ``source_images`` : list of PIL Images (sources to perturb)
         - ``target_hashes`` : list of pHash values to collide with
         - ``target_images`` : list of PIL Images (targets, for reference)
+        - ``_report_dir``   : Path where the HTML report is written
+        - ``_phf_name``     : str, identifier for the reporter
     """
     # run_evohash.py adds EvoHash/ to PYTHONPATH so gigaevo's exec_runner
     # subprocesses can import the evohash package.  Use evohash.__file__ to
@@ -40,10 +42,15 @@ def build_context() -> dict:
     targets = [p[1] for p in pairs]
     target_hashes = [phf.compute(img) for img in targets]
 
+    from evohash.reporter import init_run
+    init_run("phash", phf.threshold, N_PAIRS_EVAL)
+
     return {
         "hash_fn": phf,
         "threshold": phf.threshold,
         "source_images": sources,
         "target_hashes": target_hashes,
         "target_images": targets,
+        "_report_dir": None,
+        "_phf_name": "phash",
     }
