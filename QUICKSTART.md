@@ -202,6 +202,20 @@ with the following panels updated every refresh cycle:
 | `monitor/best_l2` | L2 of the best program over time |
 | `monitor/top3` | Table with top-3 programs and their metrics |
 
+## Notebooks
+
+| Notebook | What it does |
+|---|---|
+| [notebooks/baselines_evaluation.ipynb](notebooks/baselines_evaluation.ipynb) | Runs all baseline attacks and displays metrics (ASR, L2, Efficiency, LPIPS, Time) with bar charts, scatter plots, and heatmaps |
+
+```bash
+pip install jupyter matplotlib seaborn pandas
+jupyter notebook notebooks/baselines_evaluation.ipynb
+```
+
+Set `N_PAIRS = 100` in the first cell for the full benchmark, or keep it at `20` for a quick test.
+The notebook is independent of GigaEvo and Redis — it can run in parallel with evolution.
+
 ## Troubleshooting
 
 **`FileNotFoundError: data/imagenet_val/ not found`**

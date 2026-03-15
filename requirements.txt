@@ -33,3 +33,9 @@ tabulate>=0.9.0         # pretty-print evaluation tables
 
 # ── Experiment tracking ───────────────────────────────────────────────────────
 wandb>=0.17.0
+
+# ── Notebooks ─────────────────────────────────────────────────────────────────
+jupyter>=1.0.0
+matplotlib>=3.7.0
+seaborn>=0.13.0
+pandas>=2.0.0
