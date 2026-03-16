@@ -87,6 +87,35 @@ async def stop_run():
     return {"ok": True}
 
 
+@app.post("/api/clear-data")
+async def clear_data(redis_port: int = 6379, redis_db: int = 0):
+    if runner.status == Status.RUNNING:
+        return {"ok": False, "message": "Сначала остановите процесс"}
+    # Clear logs
+    runner.log_lines = []
+    runner.status = Status.IDLE
+    runner.generations_done = 0
+    runner.total_generations = 0
+    runner.error_message = ""
+    # Clear grid images
+    try:
+        grid_dir = Path(__file__).parent / "static" / "grids"
+        if grid_dir.exists():
+            for f in grid_dir.iterdir():
+                f.unlink()
+    except Exception:
+        pass
+    # Flush Redis DB
+    try:
+        import redis as redis_lib
+        r = redis_lib.Redis(port=redis_port, db=redis_db, socket_connect_timeout=2)
+        r.flushdb()
+        r.close()
+    except Exception:
+        pass
+    return {"ok": True}
+
+
 @app.get("/api/logs")
 async def get_logs(offset: int = 0):
     lines = runner.log_lines[offset:]

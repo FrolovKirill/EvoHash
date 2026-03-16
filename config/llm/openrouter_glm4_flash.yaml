@@ -1,0 +1,17 @@
+# @package _global_
+
+# GLM-4.7 Flash via OpenRouter (through local fixup proxy)
+# https://openrouter.ai/z-ai/glm-4.7-flash
+
+llm:
+  _target_: gigaevo.llm.models.MultiModelRouter
+  _convert_: all
+  models:
+    - _target_: langchain_openai.ChatOpenAI
+      model: z-ai/glm-4.7-flash
+      api_key: ${oc.env:OPENAI_API_KEY}
+      temperature: ${temperature}
+      max_tokens: ${max_tokens}
+      base_url: http://localhost:8100/api/v1
+      request_timeout: ${request_timeout}
+  probabilities: [1.0]

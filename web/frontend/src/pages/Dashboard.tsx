@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Play, Square, CheckCircle, XCircle, AlertCircle } from 'lucide-react'
+import { Play, Square, CheckCircle, XCircle, AlertCircle, RotateCcw, Trash2 } from 'lucide-react'
 import { apiFetch, useStatus, useEnvCheck } from '../hooks/useApi'
 import StatusBadge from '../components/StatusBadge'
 
@@ -11,9 +11,15 @@ const PHF_OPTIONS = [
 
 const LLM_OPTIONS = [
   { value: 'openrouter_gpt_oss', label: 'GPT-OSS 120B (OpenRouter)' },
+  { value: 'openrouter_glm4_flash', label: 'GLM-4.7 Flash (OpenRouter)' },
+  { value: 'openrouter_qwen35_35b', label: 'Qwen 3.5 35B-A3B (OpenRouter)' },
+  { value: 'openrouter_qwen35_122b', label: 'Qwen 3.5 122B-A10B (OpenRouter)' },
 ]
 
+const DEFAULTS = { phf: 'phash', generations: 50, llm: 'openrouter_gpt_oss', nPairs: 10 }
+
 const STORAGE_KEY = 'evohash_config'
+const LAST_RUN_KEY = 'evohash_last_run'
 
 function loadConfig() {
   try {
@@ -21,6 +27,14 @@ function loadConfig() {
     if (raw) return JSON.parse(raw)
   } catch {}
   return {}
+}
+
+function loadLastRun() {
+  try {
+    const raw = localStorage.getItem(LAST_RUN_KEY)
+    if (raw) return JSON.parse(raw)
+  } catch {}
+  return null
 }
 
 export default function Dashboard() {
@@ -33,6 +47,8 @@ export default function Dashboard() {
   const [llm, setLlm] = useState(saved.llm ?? 'openrouter_gpt_oss')
   const [nPairs, setNPairs] = useState<string>(String(saved.nPairs ?? 10))
   const [starting, setStarting] = useState(false)
+  const [lastRun, setLastRun] = useState<any>(loadLastRun)
+  const [clearMsg, setClearMsg] = useState<string | null>(null)
 
   const generationsNum = parseInt(generations) || 0
   const nPairsNum = parseInt(nPairs) || 0
@@ -51,6 +67,9 @@ export default function Dashboard() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phf, generations: generationsNum, llm_config: llm, n_pairs: nPairsNum }),
       })
+      const run = { phf, generations: generationsNum, llm, nPairs: nPairsNum, startedAt: new Date().toLocaleString('ru-RU') }
+      localStorage.setItem(LAST_RUN_KEY, JSON.stringify(run))
+      setLastRun(run)
     } finally {
       setStarting(false)
     }
@@ -58,6 +77,26 @@ export default function Dashboard() {
 
   async function handleStop() {
     await apiFetch('/api/stop', { method: 'POST' })
+  }
+
+  function handleReset() {
+    setPhf(DEFAULTS.phf)
+    setGenerations(String(DEFAULTS.generations))
+    setLlm(DEFAULTS.llm)
+    setNPairs(String(DEFAULTS.nPairs))
+  }
+
+  async function handleClear() {
+    if (isRunning) {
+      setClearMsg('Сначала остановите процесс')
+      setTimeout(() => setClearMsg(null), 3000)
+      return
+    }
+    await apiFetch('/api/clear-data', { method: 'POST' })
+    localStorage.removeItem(LAST_RUN_KEY)
+    setLastRun(null)
+    setClearMsg('Данные очищены')
+    setTimeout(() => setClearMsg(null), 3000)
   }
 
   const progress = status?.total_generations
@@ -158,7 +197,7 @@ export default function Dashboard() {
       )}
 
       {/* Buttons */}
-      <div className="flex gap-3">
+      <div className="flex items-center gap-3 flex-wrap">
         {!isRunning ? (
           <button
             onClick={handleStart}
@@ -177,6 +216,20 @@ export default function Dashboard() {
             СТОП
           </button>
         )}
+        <button
+          onClick={handleReset}
+          className="flex items-center gap-2 px-4 py-3 text-gray-400 hover:text-white border border-gray-700 hover:border-gray-500 rounded transition-all text-sm"
+        >
+          <RotateCcw size={14} />
+          Сбросить настройки
+        </button>
+        <button
+          onClick={handleClear}
+          className="flex items-center gap-2 px-4 py-3 text-gray-400 hover:text-red-400 border border-gray-700 hover:border-red-500/50 rounded transition-all text-sm"
+        >
+          <Trash2 size={14} />
+          Очистить данные
+        </button>
         {status?.status === 'error' && (
           <div className="flex items-center gap-2 text-red-400 text-sm">
             <AlertCircle size={16} />
@@ -184,6 +237,43 @@ export default function Dashboard() {
           </div>
         )}
       </div>
+
+      {/* Clear message toast */}
+      {clearMsg && (
+        <div className={`mt-4 px-4 py-2 rounded text-sm inline-block ${
+          clearMsg.includes('остановите') ? 'bg-red-500/10 text-red-400 border border-red-500/30' : 'bg-green-500/10 text-green-400 border border-green-500/30'
+        }`}>
+          {clearMsg}
+        </div>
+      )}
+
+      {/* Last run info */}
+      {lastRun && (
+        <div className="mt-6 bg-dark-1 rounded border border-gray-800 p-4">
+          <div className="text-xs text-gray-500 uppercase tracking-wider mb-3">Последний запуск</div>
+          <div className="grid grid-cols-4 gap-4 text-sm">
+            <div>
+              <div className="text-gray-500 text-xs mb-1">Хэш-функция</div>
+              <div className="text-white">{PHF_OPTIONS.find(o => o.value === lastRun.phf)?.label ?? lastRun.phf}</div>
+            </div>
+            <div>
+              <div className="text-gray-500 text-xs mb-1">Поколения</div>
+              <div className="text-white">{lastRun.generations}</div>
+            </div>
+            <div>
+              <div className="text-gray-500 text-xs mb-1">LLM</div>
+              <div className="text-white">{LLM_OPTIONS.find(o => o.value === lastRun.llm)?.label ?? lastRun.llm}</div>
+            </div>
+            <div>
+              <div className="text-gray-500 text-xs mb-1">Пар</div>
+              <div className="text-white">{lastRun.nPairs}</div>
+            </div>
+          </div>
+          {lastRun.startedAt && (
+            <div className="text-xs text-gray-600 mt-3">Запущено: {lastRun.startedAt}</div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

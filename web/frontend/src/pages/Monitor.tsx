@@ -30,7 +30,7 @@ export default function Monitor() {
 
   useEffect(() => {
     if (tab !== 'best') return
-    const id = setInterval(() => { setBestTs(Date.now()); setBestError(false) }, 3000)
+    const id = setInterval(() => { setBestTs(Date.now()); setBestError(false) }, 2000)
     return () => clearInterval(id)
   }, [tab])
 

@@ -205,7 +205,12 @@ def _load_dotenv(path: Path, env: dict[str, str]) -> None:
 
 
 _PROXY_PORT = 8100
-_PROXY_CONFIGS = {"openrouter_gpt_oss"}  # LLM configs that route through the proxy
+_PROXY_CONFIGS = {
+    "openrouter_gpt_oss",
+    "openrouter_glm4_flash",
+    "openrouter_qwen35_35b",
+    "openrouter_qwen35_122b",
+}  # LLM configs that route through the proxy
 
 
 def _maybe_start_proxy(llm: str) -> subprocess.Popen | None:
