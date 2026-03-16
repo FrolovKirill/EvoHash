@@ -102,6 +102,16 @@ class Runner:
         self.generations_done = 0
         self.error_message = ""
 
+        # Flush the Redis DB so gigaevo loads initial programs fresh
+        # (resume mode skips archive population — programs never enter the island)
+        try:
+            import redis as redis_lib
+            r = redis_lib.Redis(port=6379, db=0, socket_connect_timeout=2)
+            r.flushdb()
+            r.close()
+        except Exception:
+            pass
+
         env = os.environ.copy()
         env["PYTHONPATH"] = str(PROJECT_ROOT) + os.pathsep + str(PROJECT_ROOT / "gigaevo-core")
         env["EVOHASH_REDIS_PORT"] = str(redis_port)
@@ -117,7 +127,6 @@ class Runner:
                 cwd=str(PROJECT_ROOT),
                 env=env,
             )
-            loop = asyncio.get_event_loop()
             await self._stream_process(dl_proc)
             if dl_proc.returncode and dl_proc.returncode != 0:
                 self.status = Status.ERROR
@@ -137,7 +146,6 @@ class Runner:
             phf,
             "--max-generations", str(generations),
             "--llm", llm_config,
-            "--resume",  # always resume to avoid "Redis not empty" error
         ]
 
         self.process = subprocess.Popen(
