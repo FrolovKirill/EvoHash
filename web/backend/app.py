@@ -13,7 +13,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from redis_bridge import get_best_metrics, get_programs, reset_client, build_metrics_history
+from redis_bridge import get_best_metrics, get_latest_metrics, get_programs, reset_client, build_metrics_history
 from runner import Status, runner
 
 PROJECT_ROOT = Path(__file__).parent.parent.parent
@@ -107,6 +107,13 @@ async def get_metrics(phf: str = "phash", redis_port: int = 6379):
     return {"metrics": best}
 
 
+@app.get("/api/metrics-latest")
+async def get_metrics_latest(phf: str = "phash", redis_port: int = 6379):
+    reset_client()
+    latest = get_latest_metrics(phf, redis_port)
+    return {"metrics": latest}
+
+
 @app.get("/api/metrics-history")
 async def get_metrics_history_endpoint(phf: str = "phash", redis_port: int = 6379):
     reset_client()
@@ -115,8 +122,9 @@ async def get_metrics_history_endpoint(phf: str = "phash", redis_port: int = 637
 
 
 @app.get("/api/grid-image")
-async def grid_image(phf: str = "phash"):
-    grid_path = Path(__file__).parent / "static" / "grids" / f"{phf}_latest.png"
+async def grid_image(phf: str = "phash", variant: str = "latest"):
+    filename = f"{phf}_best.png" if variant == "best" else f"{phf}_latest.png"
+    grid_path = Path(__file__).parent / "static" / "grids" / filename
     if not grid_path.exists():
         return {"error": "no image yet"}
     return FileResponse(str(grid_path), media_type="image/png", headers={"Cache-Control": "no-cache"})

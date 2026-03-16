@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { useLogSocket } from '../hooks/useWebSocket'
-import { useStatus, useMetrics, useMetricsHistory } from '../hooks/useApi'
+import { useStatus, useMetrics, useLatestMetrics, useMetricsHistory } from '../hooks/useApi'
 import LogViewer from '../components/LogViewer'
 import MetricCard from '../components/MetricCard'
 import StatusBadge from '../components/StatusBadge'
@@ -10,18 +10,27 @@ const BASE = import.meta.env.DEV ? 'http://localhost:8765' : ''
 
 export default function Monitor() {
   const { status } = useStatus()
-  const metrics = useMetrics(status?.phf || 'phash')
-  const { lines } = useLogSocket()
-  const chartData = useMetricsHistory(status?.phf || 'phash')
-
-  const [tab, setTab] = useState<'logs' | 'chart' | 'examples'>('logs')
-  const [gridTs, setGridTs] = useState(Date.now())
-  const [gridError, setGridError] = useState(false)
   const phf = status?.phf || 'phash'
+  const bestMetrics = useMetrics(phf)
+  const latestMetrics = useLatestMetrics(phf)
+  const { lines } = useLogSocket()
+  const chartData = useMetricsHistory(phf)
+
+  const [tab, setTab] = useState<'logs' | 'chart' | 'latest' | 'best'>('logs')
+  const [latestTs, setLatestTs] = useState(Date.now())
+  const [bestTs, setBestTs] = useState(Date.now())
+  const [latestError, setLatestError] = useState(false)
+  const [bestError, setBestError] = useState(false)
 
   useEffect(() => {
-    if (tab !== 'examples') return
-    const id = setInterval(() => setGridTs(Date.now()), 5000)
+    if (tab !== 'latest') return
+    const id = setInterval(() => { setLatestTs(Date.now()); setLatestError(false) }, 2000)
+    return () => clearInterval(id)
+  }, [tab])
+
+  useEffect(() => {
+    if (tab !== 'best') return
+    const id = setInterval(() => { setBestTs(Date.now()); setBestError(false) }, 3000)
     return () => clearInterval(id)
   }, [tab])
 
@@ -32,12 +41,22 @@ export default function Monitor() {
         {status && <StatusBadge status={status.status} />}
       </div>
 
-      {/* Metrics row */}
+      {/* Best program metrics */}
+      <div className="text-xs text-gray-500 uppercase tracking-wider mb-2">Лучшая программа</div>
+      <div className="grid grid-cols-4 gap-4 mb-4">
+        <MetricCard label="Efficiency" value={bestMetrics?.efficiency ?? '—'} />
+        <MetricCard label="ASR" value={bestMetrics?.asr ?? '—'} color="text-green-400" />
+        <MetricCard label="L2 Distance" value={bestMetrics?.l2 ?? '—'} color="text-yellow-400" />
+        <MetricCard label="Queries" value={bestMetrics?.n_queries ?? '—'} color="text-purple-400" />
+      </div>
+
+      {/* Latest program metrics */}
+      <div className="text-xs text-gray-500 uppercase tracking-wider mb-2">Последняя программа</div>
       <div className="grid grid-cols-4 gap-4 mb-6">
-        <MetricCard label="Efficiency" value={metrics?.efficiency ?? '—'} />
-        <MetricCard label="ASR" value={metrics?.asr ?? '—'} color="text-green-400" />
-        <MetricCard label="L2 Distance" value={metrics?.l2 ?? '—'} color="text-yellow-400" />
-        <MetricCard label="Queries" value={metrics?.n_queries ?? '—'} color="text-purple-400" />
+        <MetricCard label="Efficiency" value={latestMetrics?.efficiency ?? '—'} />
+        <MetricCard label="ASR" value={latestMetrics?.asr ?? '—'} color="text-green-400" />
+        <MetricCard label="L2 Distance" value={latestMetrics?.l2 ?? '—'} color="text-yellow-400" />
+        <MetricCard label="Queries" value={latestMetrics?.n_queries ?? '—'} color="text-purple-400" />
       </div>
 
       {/* Progress */}
@@ -58,10 +77,10 @@ export default function Monitor() {
 
       {/* Tabs */}
       <div className="flex gap-1 mb-4">
-        {([['logs', 'Логи'], ['chart', 'График'], ['examples', 'Примеры']] as const).map(([t, label]) => (
+        {([['logs', 'Логи'], ['chart', 'График'], ['latest', 'Последняя'], ['best', 'Лучшая']] as const).map(([t, label]) => (
           <button
             key={t}
-            onClick={() => setTab(t as 'logs' | 'chart' | 'examples')}
+            onClick={() => setTab(t as typeof tab)}
             className={`px-4 py-1.5 rounded text-sm transition-all ${
               tab === t ? 'bg-brand text-black font-bold' : 'text-gray-400 hover:text-white bg-dark-1'
             }`}
@@ -95,19 +114,35 @@ export default function Monitor() {
             </ResponsiveContainer>
           )}
         </div>
-      ) : (
+      ) : tab === 'latest' ? (
         <div className="bg-dark-1 rounded border border-gray-800 p-4">
-          {gridError ? (
+          {latestError ? (
             <div className="h-72 flex items-center justify-center text-gray-600 text-sm">
               Изображения появятся после запуска эволюции...
             </div>
           ) : (
             <img
-              src={`${BASE}/api/grid-image?phf=${phf}&t=${gridTs}`}
-              alt="Attack examples"
+              src={`${BASE}/api/grid-image?phf=${phf}&variant=latest&t=${latestTs}`}
+              alt="Latest attack examples"
               className="max-w-full rounded"
-              onError={() => setGridError(true)}
-              onLoad={() => setGridError(false)}
+              onError={() => setLatestError(true)}
+              onLoad={() => setLatestError(false)}
+            />
+          )}
+        </div>
+      ) : (
+        <div className="bg-dark-1 rounded border border-gray-800 p-4">
+          {bestError ? (
+            <div className="h-72 flex items-center justify-center text-gray-600 text-sm">
+              Изображения появятся после запуска эволюции...
+            </div>
+          ) : (
+            <img
+              src={`${BASE}/api/grid-image?phf=${phf}&variant=best&t=${bestTs}`}
+              alt="Best attack examples"
+              className="max-w-full rounded"
+              onError={() => setBestError(true)}
+              onLoad={() => setBestError(false)}
             />
           )}
         </div>

@@ -114,6 +114,16 @@ class Runner:
         except Exception:
             pass
 
+        # Clear best grid tracker so new run starts fresh
+        try:
+            grid_dir = Path(__file__).parent / "static" / "grids"
+            for f in grid_dir.glob("*_best_eff.txt"):
+                f.unlink()
+            for f in grid_dir.glob("*_best.png"):
+                f.unlink()
+        except Exception:
+            pass
+
         env = os.environ.copy()
         env["PYTHONPATH"] = str(PROJECT_ROOT) + os.pathsep + str(PROJECT_ROOT / "gigaevo-core")
 

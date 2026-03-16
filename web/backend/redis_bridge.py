@@ -32,6 +32,7 @@ def _flatten_program(data: dict) -> dict:
         "code": data.get("code", ""),
         "name": data.get("name", ""),
         "state": data.get("state", ""),
+        "atomic_counter": data.get("atomic_counter", 0),
     }
     metrics = data.get("metrics", {})
     if isinstance(metrics, dict):
@@ -93,6 +94,40 @@ def get_best_metrics(phf: str, redis_port: int = 6379) -> dict[str, Any]:
         "l2": best.get("l2"),
         "n_queries": best.get("n_queries"),
     }
+
+
+def get_latest_metrics(phf: str, redis_port: int = 6379) -> dict[str, Any]:
+    """Return metrics of the most recently evaluated program (highest atomic_counter)."""
+    try:
+        client = get_client(port=redis_port)
+    except Exception:
+        return {}
+    try:
+        pattern = f"{phf}:program:*"
+        keys = client.keys(pattern)
+        latest = None
+        latest_counter = -1
+        for key in keys:
+            try:
+                raw = client.get(key)
+                if raw:
+                    data = json.loads(raw)
+                    counter = data.get("atomic_counter", 0)
+                    if counter > latest_counter:
+                        latest_counter = counter
+                        latest = _flatten_program(data)
+            except Exception:
+                continue
+        if not latest:
+            return {}
+        return {
+            "efficiency": latest.get("efficiency"),
+            "asr": latest.get("asr"),
+            "l2": latest.get("l2"),
+            "n_queries": latest.get("n_queries"),
+        }
+    except Exception:
+        return {}
 
 
 def build_metrics_history(phf: str, redis_port: int = 6379) -> list[dict[str, Any]]:

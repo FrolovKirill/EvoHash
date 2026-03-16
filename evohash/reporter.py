@@ -212,6 +212,18 @@ def _log(phf_name: str, metrics: dict, context: dict, data: dict) -> None:
             grid_dir = Path(__file__).parent.parent / "web" / "backend" / "static" / "grids"
             grid_dir.mkdir(parents=True, exist_ok=True)
             grid.save(str(grid_dir / f"{phf_name}_latest.png"))
+            # Save best grid — track best efficiency in a file (survives subprocesses)
+            eff = metrics.get("efficiency", -1e9)
+            best_eff_file = grid_dir / f"{phf_name}_best_eff.txt"
+            prev_best = -1e9
+            try:
+                if best_eff_file.exists():
+                    prev_best = float(best_eff_file.read_text().strip())
+            except Exception:
+                pass
+            if eff > prev_best:
+                best_eff_file.write_text(str(eff))
+                grid.save(str(grid_dir / f"{phf_name}_best.png"))
         except Exception:
             pass
 
@@ -223,6 +235,7 @@ def _log(phf_name: str, metrics: dict, context: dict, data: dict) -> None:
         s["best_asr"] = metrics["asr"]
     if 0 < metrics.get("l2", 1e9) < s.get("min_l2", 1e9):
         s["min_l2"] = metrics["l2"]
+
 
 
 # ── Image helpers ─────────────────────────────────────────────────────────────
