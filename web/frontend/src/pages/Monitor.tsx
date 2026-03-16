@@ -23,7 +23,7 @@ export default function Monitor() {
       {/* Metrics row */}
       <div className="grid grid-cols-4 gap-4 mb-6">
         <MetricCard label="Efficiency" value={metrics?.efficiency ?? '—'} />
-        <MetricCard label="ASR" value={metrics?.asr ?? '—'} unit="%" color="text-green-400" />
+        <MetricCard label="ASR" value={metrics?.asr ?? '—'} color="text-green-400" />
         <MetricCard label="L2 Distance" value={metrics?.l2 ?? '—'} color="text-yellow-400" />
         <MetricCard label="Queries" value={metrics?.n_queries ?? '—'} color="text-purple-400" />
       </div>
