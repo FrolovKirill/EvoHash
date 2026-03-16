@@ -21,6 +21,12 @@ FRONTEND_DIST = Path(__file__).parent.parent / "frontend" / "dist"
 
 app = FastAPI(title="EvoHash Web UI")
 
+
+@app.on_event("shutdown")
+def shutdown_event():
+    """Kill any running evolution subprocess when the server stops."""
+    runner.stop()
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],

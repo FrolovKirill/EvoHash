@@ -177,6 +177,7 @@ class Runner:
             stderr=subprocess.STDOUT,
             cwd=str(PROJECT_ROOT),
             env=env,
+            start_new_session=True,  # own process group so we can kill it cleanly
         )
 
         self._log_task = asyncio.create_task(self._finish(self.process))
