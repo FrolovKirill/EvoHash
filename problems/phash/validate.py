@@ -18,6 +18,7 @@ _SENTINEL = {
     "asr": 0.0,
     "l2": 1_000_000.0,
     "n_queries": 0.0,
+    "mean_final_dist": 64.0,
 }
 
 
@@ -61,6 +62,7 @@ def validate(context: dict, data: dict) -> dict:
     successes: list[float] = []
     l2_values: list[float] = []
     query_counts: list[float] = []
+    final_dists: list[float] = []
 
     for orig_img, atk_img, m in zip(sources, attacked, per_image):
         try:
@@ -85,16 +87,19 @@ def validate(context: dict, data: dict) -> dict:
             successes.append(success)
             l2_values.append(l2)
             query_counts.append(float(m.get("n_queries", 0)))
+            final_dists.append(float(dist))
 
         except Exception:
             # Any error in a single image → treat as failed attack
             successes.append(0.0)
             l2_values.append(float(np.linalg.norm(np.zeros(3)) + 1e6))
             query_counts.append(0.0)
+            final_dists.append(64.0)
 
     asr = float(np.mean(successes))
     mean_l2 = float(np.mean(l2_values))
     mean_queries = float(np.mean(query_counts))
+    mean_final_dist = float(np.mean(final_dists))
     efficiency = asr / (mean_l2 + 1e-6)
 
     result = {
@@ -103,6 +108,7 @@ def validate(context: dict, data: dict) -> dict:
         "asr": asr,
         "l2": mean_l2,
         "n_queries": mean_queries,
+        "mean_final_dist": mean_final_dist,
     }
 
     try:

@@ -57,3 +57,14 @@ specs:
     include_in_prompts: false
     significant_change: 10.0
     sentinel_value: 100000.0
+
+  mean_final_dist:
+    description: "Mean final Hamming distance to target hash (collision requires ≤ 12). Lower is better — even when ASR=0 this shows how close the attack got."
+    decimals: 2
+    is_primary: false
+    higher_is_better: false
+    lower_bound: 0.0
+    upper_bound: 64.0
+    include_in_prompts: true
+    significant_change: 1.0
+    sentinel_value: 64.0
