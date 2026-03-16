@@ -44,8 +44,16 @@ All 8 baselines from the paper are implemented for pHash, PDQ, and NeuralHash:
 
 ```
 EvoHash/
-├── run_evohash.py              # Main entry point
+├── run_evohash.py              # CLI entry point
 ├── requirements.txt
+├── web/                        # Web UI (FastAPI + React)
+│   ├── run_web.py              # Single entry point: python web/run_web.py
+│   ├── backend/
+│   │   ├── app.py              # FastAPI app (REST + WebSocket)
+│   │   ├── runner.py           # Subprocess manager (start/stop/stream)
+│   │   └── redis_bridge.py     # Reads metrics/programs from Redis (fakeredis)
+│   └── frontend/               # React + Vite + TypeScript + Tailwind
+│       └── src/pages/          # Dashboard / Monitor / Results / Baselines
 ├── evohash/
 │   ├── phf/                    # PHF wrapper library
 │   │   ├── base.py             # Abstract PHFWrapper interface
@@ -87,7 +95,21 @@ EvoHash/
 
 ## Quick Start
 
-See [QUICKSTART.md](QUICKSTART.md).
+### Web UI (recommended)
+
+The easiest way to run EvoHash is via the built-in web interface — no Redis, no manual CLI steps needed:
+
+```bash
+pip install -r web/backend/requirements.txt
+python web/run_web.py
+# → opens http://localhost:8765
+```
+
+The web UI handles everything: dataset download, embedded Redis, proxy startup, live log streaming, and metrics charts.
+
+### CLI
+
+See [QUICKSTART.md](QUICKSTART.md) for the full manual setup.
 
 ## Evaluation Metrics
 

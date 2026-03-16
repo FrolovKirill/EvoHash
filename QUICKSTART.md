@@ -1,6 +1,37 @@
 # Quick Start
 
-## Prerequisites
+## Option A — Web UI (recommended, no Redis required)
+
+The web interface runs the entire pipeline with one button press: it handles dataset download, starts an embedded Redis (via `fakeredis` — no separate server needed), streams live logs and metrics, and shows results in a browser.
+
+```bash
+# 1. Install backend dependencies
+pip install -r web/backend/requirements.txt
+
+# 2. Copy and fill in your API key
+cp .env.example .env
+# edit .env → set OPENROUTER_API_KEY
+
+# 3. Clone GigaEvo (still required)
+git clone https://github.com/FusionBrainLab/gigaevo-core gigaevo-core
+pip install -e gigaevo-core/
+
+# 4. Launch
+python web/run_web.py
+# → opens http://localhost:8765
+```
+
+The web UI has four pages:
+- **Запуск** — choose PHF, configure generations/pairs, start/stop the run
+- **Монитор** — live colorized logs + efficiency/ASR chart per generation
+- **Результаты** — table of evolved programs with code viewer and .py download
+- **Бейзлайны** — run `evaluate.py` on all baseline attacks with one click
+
+---
+
+## Option B — CLI (manual setup)
+
+### Prerequisites
 
 - Python 3.12+
 - Redis server
@@ -8,7 +39,7 @@
 - A [Weights & Biases](https://wandb.ai/) API key (for experiment tracking)
 - **macOS** (required only for NeuralHash)
 
-## 1. Clone and install
+### 1. Clone and install
 
 ```bash
 # Clone EvoHash
@@ -40,7 +71,7 @@ cp /System/Library/Frameworks/Vision.framework/Resources/neuralhash_128x96_seed1
    data/neuralhash_model/seed1.dat
 ```
 
-## 2. Configure environment
+### 2. Configure environment
 
 ```bash
 # Copy and edit the example env file
@@ -58,7 +89,7 @@ WANDB_PROJECT=evohash
 > so GigaEvo's LLM configs work without modification.
 > All keys are read from `.env` automatically — no `wandb login` needed.
 
-## 3. Download dataset
+### 3. Download dataset
 
 ```bash
 # ~200 images (tries ImageNet → Tiny-ImageNet → synthetic fallback)
@@ -75,7 +106,9 @@ For a quick smoke test without any downloads:
 python scripts/download_dataset.py --synthetic --n-images 30
 ```
 
-## 4. Start Redis
+### 4. Start Redis
+
+> **Skip this step if you are using the Web UI** — it starts an embedded Redis automatically via `fakeredis`.
 
 ```bash
 redis-server --daemonize yes
@@ -86,7 +119,7 @@ Verify it's running:
 redis-cli ping   # should print PONG
 ```
 
-## 5. Run evolution
+### 5. Run evolution
 
 ```bash
 # Evolve pHash attacks for 50 generations
@@ -115,7 +148,7 @@ Outputs are also written to `gigaevo-core/outputs/YYYY-MM-DD/HH-MM-SS/`.
 > that fixes structured-output JSON responses from OpenRouter. The proxy runs on port 8100
 > and stops when evolution finishes. No manual setup is needed.
 
-## 6. Evaluate results
+### 6. Evaluate results
 
 Benchmark all seed strategies (no evolution required):
 ```bash
@@ -151,7 +184,7 @@ Expected output format:
 | atkscopes_attack     | phash | 0.02 |    0.11 |     0.1818 |   61673 | 0.004 |   190.50 |
 ```
 
-## Typical Workflow
+### Typical Workflow
 
 ```
 download data → start Redis → run evolution (hours) → evaluate evolved programs
@@ -172,7 +205,7 @@ python scripts/show_best.py phash --top 10 --save
 python scripts/show_best.py phash --metric asr
 ```
 
-### Live monitoring during evolution
+#### Live monitoring during evolution
 
 To watch the best programs update in real time while evolution is running,
 open a second terminal and run:
@@ -206,7 +239,7 @@ with the following panels updated every refresh cycle:
 | `monitor/best_l2` | L2 of the best program over time |
 | `monitor/top3` | Table with top-3 programs and their metrics |
 
-## Notebooks
+### Notebooks
 
 | Notebook | What it does |
 |---|---|
@@ -220,7 +253,7 @@ jupyter notebook notebooks/baselines_evaluation.ipynb
 Set `N_PAIRS = 100` in the first cell for the full benchmark, or keep it at `20` for a quick test.
 The notebook is independent of GigaEvo and Redis — it can run in parallel with evolution.
 
-## Troubleshooting
+### Troubleshooting
 
 **`FileNotFoundError: data/imagenet_val/ not found`**
 → Run `python scripts/download_dataset.py` first.
@@ -242,3 +275,9 @@ The notebook is independent of GigaEvo and Redis — it can run in parallel with
 
 **`gigaevo-core not found`**
 → Clone the repo into `gigaevo-core/` (see Step 1).
+
+**Web UI doesn't open in the browser**
+→ Navigate to `http://localhost:8765` manually. Use `--no-browser` flag to suppress auto-open.
+
+**Web UI: "Frontend ещё не собран"**
+→ Run `cd web/frontend && npm install && npm run build` to build the frontend manually.
