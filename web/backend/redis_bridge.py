@@ -88,8 +88,38 @@ def get_best_metrics(phf: str, redis_port: int = 6379) -> dict[str, Any]:
         return {}
     best = programs[0]
     return {
-        "efficiency": best.get("efficiency", 0),
-        "asr": best.get("asr", 0),
-        "l2": best.get("l2", 0),
-        "n_queries": best.get("n_queries", 0),
+        "efficiency": best.get("efficiency"),
+        "asr": best.get("asr"),
+        "l2": best.get("l2"),
+        "n_queries": best.get("n_queries"),
     }
+
+
+def build_metrics_history(phf: str, redis_port: int = 6379) -> list[dict[str, Any]]:
+    """Build chart data from all programs in Redis, grouped by generation (running best)."""
+    programs = get_programs(phf, redis_port, top_n=10000)
+    if not programs:
+        return []
+    by_gen: dict[int, dict] = {}
+    for p in programs:
+        gen = p.get("generation")
+        if gen is None:
+            continue
+        gen = int(gen)
+        eff = float(p.get("efficiency", -1))
+        if gen not in by_gen or eff > float(by_gen[gen].get("efficiency", -1)):
+            by_gen[gen] = p
+    history = []
+    best_eff = -1e9
+    best_asr = 0.0
+    for gen in sorted(by_gen.keys()):
+        p = by_gen[gen]
+        eff = float(p.get("efficiency", 0))
+        asr = float(p.get("asr", 0))
+        if eff > best_eff:
+            best_eff = eff
+            best_asr = asr
+        history.append({"gen": gen, "efficiency": best_eff, "asr": best_asr})
+    return history
+
+

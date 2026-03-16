@@ -49,6 +49,20 @@ export function useMetrics(phf: string) {
   return metrics
 }
 
+export function useMetricsHistory(phf: string) {
+  const [history, setHistory] = useState<any[]>([])
+
+  useEffect(() => {
+    const fetch_ = () =>
+      apiFetch(`/api/metrics-history?phf=${phf}`).then((d) => setHistory(d.history)).catch(() => {})
+    fetch_()
+    const id = setInterval(fetch_, 3000)
+    return () => clearInterval(id)
+  }, [phf])
+
+  return history
+}
+
 export function usePrograms(phf: string) {
   const [programs, setPrograms] = useState<any[]>([])
   const [loading, setLoading] = useState(false)

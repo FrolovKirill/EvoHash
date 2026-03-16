@@ -13,7 +13,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from redis_bridge import get_best_metrics, get_programs, reset_client
+from redis_bridge import get_best_metrics, get_programs, reset_client, build_metrics_history
 from runner import Status, runner
 
 PROJECT_ROOT = Path(__file__).parent.parent.parent
@@ -105,6 +105,21 @@ async def get_metrics(phf: str = "phash", redis_port: int = 6379):
     reset_client()
     best = get_best_metrics(phf, redis_port)
     return {"metrics": best}
+
+
+@app.get("/api/metrics-history")
+async def get_metrics_history_endpoint(phf: str = "phash", redis_port: int = 6379):
+    reset_client()
+    history = build_metrics_history(phf, redis_port)
+    return {"history": history}
+
+
+@app.get("/api/grid-image")
+async def grid_image(phf: str = "phash"):
+    grid_path = Path(__file__).parent / "static" / "grids" / f"{phf}_latest.png"
+    if not grid_path.exists():
+        return {"error": "no image yet"}
+    return FileResponse(str(grid_path), media_type="image/png", headers={"Cache-Control": "no-cache"})
 
 
 @app.get("/api/baselines")
@@ -207,6 +222,7 @@ async def ws_logs(ws: WebSocket):
         queue.put_nowait(line)
 
     runner.log_callbacks.append(on_line)
+    last_gen = -1
     try:
         while True:
             try:
@@ -220,6 +236,21 @@ async def ws_logs(ws: WebSocket):
                     "generations_done": runner.generations_done,
                     "total_generations": runner.total_generations,
                 }))
+                # Send metric update when generation advances
+                if runner.status == Status.RUNNING and runner.generations_done > last_gen:
+                    last_gen = runner.generations_done
+                    try:
+                        reset_client()
+                        best = get_best_metrics(runner.current_phf or "phash")
+                        if best:
+                            await ws.send_text(json.dumps({
+                                "type": "metric",
+                                "generations_done": runner.generations_done,
+                                "efficiency": best.get("efficiency", 0),
+                                "asr": best.get("asr", 0),
+                            }))
+                    except Exception:
+                        pass
     except WebSocketDisconnect:
         pass
     finally:

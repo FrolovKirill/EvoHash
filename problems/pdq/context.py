@@ -25,7 +25,9 @@ def build_context() -> dict:
 
     phf = PDQWrapper()
 
-    pairs = load_image_pairs(data_dir, n_pairs=N_PAIRS_EVAL)
+    from evohash.dataset import get_generation_seed
+    seed = get_generation_seed("pdq")
+    pairs = load_image_pairs(data_dir, n_pairs=N_PAIRS_EVAL, seed=seed)
     sources = [p[0] for p in pairs]
     targets = [p[1] for p in pairs]
     target_hashes = [phf.compute(img) for img in targets]

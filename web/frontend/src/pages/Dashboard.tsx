@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Play, Square, CheckCircle, XCircle, AlertCircle } from 'lucide-react'
 import { apiFetch, useStatus, useEnvCheck } from '../hooks/useApi'
 import StatusBadge from '../components/StatusBadge'
@@ -13,15 +13,33 @@ const LLM_OPTIONS = [
   { value: 'openrouter_gpt_oss', label: 'GPT-OSS 120B (OpenRouter)' },
 ]
 
+const STORAGE_KEY = 'evohash_config'
+
+function loadConfig() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (raw) return JSON.parse(raw)
+  } catch {}
+  return {}
+}
+
 export default function Dashboard() {
   const { status } = useStatus()
   const checks = useEnvCheck()
 
-  const [phf, setPhf] = useState('phash')
-  const [generations, setGenerations] = useState(50)
-  const [llm, setLlm] = useState('openrouter_gpt_oss')
-  const [nPairs, setNPairs] = useState(10)
+  const saved = loadConfig()
+  const [phf, setPhf] = useState(saved.phf ?? 'phash')
+  const [generations, setGenerations] = useState<string>(String(saved.generations ?? 50))
+  const [llm, setLlm] = useState(saved.llm ?? 'openrouter_gpt_oss')
+  const [nPairs, setNPairs] = useState<string>(String(saved.nPairs ?? 10))
   const [starting, setStarting] = useState(false)
+
+  const generationsNum = parseInt(generations) || 0
+  const nPairsNum = parseInt(nPairs) || 0
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ phf, generations: generationsNum || 50, llm, nPairs: nPairsNum || 10 }))
+  }, [phf, generations, llm, nPairs])
 
   const isRunning = status?.status === 'running' || status?.status === 'downloading' || status?.status === 'evaluating'
 
@@ -31,7 +49,7 @@ export default function Dashboard() {
       await apiFetch('/api/run', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phf, generations, llm_config: llm, n_pairs: nPairs }),
+        body: JSON.stringify({ phf, generations: generationsNum, llm_config: llm, n_pairs: nPairsNum }),
       })
     } finally {
       setStarting(false)
@@ -96,7 +114,7 @@ export default function Dashboard() {
               <label className="block text-sm text-gray-400 mb-1">Поколения</label>
               <input
                 type="number" min={1} max={1000} value={generations}
-                onChange={(e) => setGenerations(+e.target.value)}
+                onChange={(e) => setGenerations(e.target.value)}
                 className="w-full bg-dark-2 border border-gray-700 rounded px-3 py-2 text-white text-sm focus:border-brand outline-none"
               />
             </div>
@@ -104,7 +122,7 @@ export default function Dashboard() {
               <label className="block text-sm text-gray-400 mb-1">Пар изображений</label>
               <input
                 type="number" min={1} max={100} value={nPairs}
-                onChange={(e) => setNPairs(+e.target.value)}
+                onChange={(e) => setNPairs(e.target.value)}
                 className="w-full bg-dark-2 border border-gray-700 rounded px-3 py-2 text-white text-sm focus:border-brand outline-none"
               />
             </div>

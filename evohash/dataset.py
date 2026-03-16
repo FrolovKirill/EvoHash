@@ -105,6 +105,32 @@ def _load_image(path: Path, size: tuple[int, int]) -> Image.Image:
     return Image.open(path).convert("RGB").resize(size, Image.LANCZOS)
 
 
+def get_generation_seed(phf_name: str, redis_port: int = 6379, redis_db: int = 0) -> int:
+    """Read the max completed generation from Redis to use as pair seed.
+
+    All programs within the same generation see the same max_gen (because the
+    previous generation is fully complete before new mutants are created),
+    so they get identical pairs.  Between generations max_gen increments,
+    producing a different shuffle.
+    """
+    try:
+        import redis as _redis
+        import json as _json
+        r = _redis.Redis(port=redis_port, db=redis_db, socket_connect_timeout=1)
+        keys = r.keys(f"{phf_name}:program:*")
+        max_gen = -1
+        for key in keys:
+            raw = r.get(key)
+            if raw:
+                data = _json.loads(raw)
+                g = data.get("lineage", {}).get("generation", -1)
+                if isinstance(g, (int, float)) and g > max_gen:
+                    max_gen = int(g)
+        return max(0, max_gen + 1)
+    except Exception:
+        return 0
+
+
 def image_to_array(image: Image.Image) -> np.ndarray:
     """Convert a PIL Image to a float32 numpy array in [0, 255]."""
     return np.array(image).astype(np.float32)

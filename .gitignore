@@ -63,3 +63,6 @@ dump.rdb
 # Frontend
 node_modules/
 web/frontend/dist/
+
+# Web UI generated assets
+web/backend/static/

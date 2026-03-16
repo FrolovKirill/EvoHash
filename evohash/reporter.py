@@ -205,6 +205,16 @@ def _log(phf_name: str, metrics: dict, context: dict, data: dict) -> None:
 
     wandb.log(log)
 
+    # ── Save grid to disk for web UI ──────────────────────────────────────────
+    if n_show > 0 and grid is not None:
+        try:
+            from pathlib import Path
+            grid_dir = Path(__file__).parent.parent / "web" / "backend" / "static" / "grids"
+            grid_dir.mkdir(parents=True, exist_ok=True)
+            grid.save(str(grid_dir / f"{phf_name}_latest.png"))
+        except Exception:
+            pass
+
     # ── Rolling best in run summary ──────────────────────────────────────────
     s = wandb.run.summary
     if metrics.get("efficiency", -1e9) > s.get("best_efficiency", -1e9):

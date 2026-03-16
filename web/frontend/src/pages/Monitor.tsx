@@ -1,17 +1,29 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { useLogSocket } from '../hooks/useWebSocket'
-import { useStatus, useMetrics } from '../hooks/useApi'
+import { useStatus, useMetrics, useMetricsHistory } from '../hooks/useApi'
 import LogViewer from '../components/LogViewer'
 import MetricCard from '../components/MetricCard'
 import StatusBadge from '../components/StatusBadge'
 
+const BASE = import.meta.env.DEV ? 'http://localhost:8765' : ''
+
 export default function Monitor() {
   const { status } = useStatus()
   const metrics = useMetrics(status?.phf || 'phash')
-  const { lines, history: chartData } = useLogSocket()
+  const { lines } = useLogSocket()
+  const chartData = useMetricsHistory(status?.phf || 'phash')
 
-  const [tab, setTab] = useState<'logs' | 'chart'>('logs')
+  const [tab, setTab] = useState<'logs' | 'chart' | 'examples'>('logs')
+  const [gridTs, setGridTs] = useState(Date.now())
+  const [gridError, setGridError] = useState(false)
+  const phf = status?.phf || 'phash'
+
+  useEffect(() => {
+    if (tab !== 'examples') return
+    const id = setInterval(() => setGridTs(Date.now()), 5000)
+    return () => clearInterval(id)
+  }, [tab])
 
   return (
     <div className="p-8 max-w-5xl">
@@ -46,22 +58,22 @@ export default function Monitor() {
 
       {/* Tabs */}
       <div className="flex gap-1 mb-4">
-        {(['logs', 'chart'] as const).map((t) => (
+        {([['logs', 'Логи'], ['chart', 'График'], ['examples', 'Примеры']] as const).map(([t, label]) => (
           <button
             key={t}
-            onClick={() => setTab(t)}
+            onClick={() => setTab(t as 'logs' | 'chart' | 'examples')}
             className={`px-4 py-1.5 rounded text-sm transition-all ${
               tab === t ? 'bg-brand text-black font-bold' : 'text-gray-400 hover:text-white bg-dark-1'
             }`}
           >
-            {t === 'logs' ? 'Логи' : 'График'}
+            {label}
           </button>
         ))}
       </div>
 
       {tab === 'logs' ? (
         <LogViewer lines={lines} height="h-[500px]" />
-      ) : (
+      ) : tab === 'chart' ? (
         <div className="bg-dark-1 rounded border border-gray-800 p-4">
           {chartData.length < 2 ? (
             <div className="h-72 flex items-center justify-center text-gray-600 text-sm">
@@ -81,6 +93,22 @@ export default function Monitor() {
                 <Line type="monotone" dataKey="asr" stroke="#22d3ee" strokeWidth={1.5} dot={false} name="ASR" />
               </LineChart>
             </ResponsiveContainer>
+          )}
+        </div>
+      ) : (
+        <div className="bg-dark-1 rounded border border-gray-800 p-4">
+          {gridError ? (
+            <div className="h-72 flex items-center justify-center text-gray-600 text-sm">
+              Изображения появятся после запуска эволюции...
+            </div>
+          ) : (
+            <img
+              src={`${BASE}/api/grid-image?phf=${phf}&t=${gridTs}`}
+              alt="Attack examples"
+              className="max-w-full rounded"
+              onError={() => setGridError(true)}
+              onLoad={() => setGridError(false)}
+            />
           )}
         </div>
       )}
