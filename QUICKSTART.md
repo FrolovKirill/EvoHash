@@ -31,8 +31,8 @@ python web/run_web.py
 > Use `--port PORT` to change the default port, `--no-browser` to suppress auto-open, `--dev` for hot-reload.
 
 The web UI has four pages:
-- **Запуск** — choose PHF, configure generations/pairs, start/stop the run
-- **Монитор** — live colorized logs + efficiency/ASR chart per generation
+- **Запуск** — choose PHF and LLM model (loaded from `config/models.yaml`), configure generations/pairs, start/stop the run. Includes "reset to defaults" and "clear data" buttons, and shows last run parameters.
+- **Монитор** — live colorized logs, efficiency/ASR chart per generation, separate metric cards and image grid tabs for best and latest programs (source/target/attacked/diff images updated every 2s).
 - **Результаты** — table of evolved programs with code viewer and .py download
 - **Бейзлайны** — run `evaluate.py` on all baseline attacks with one click
 
@@ -44,7 +44,7 @@ The web UI has four pages:
 
 - Python 3.12+
 - Redis server
-- An [OpenRouter](https://openrouter.ai/) API key (for GPT-OSS-120B mutations)
+- An [OpenRouter](https://openrouter.ai/) API key (for LLM mutations — model list in `config/models.yaml`)
 - A [Weights & Biases](https://wandb.ai/) API key (for experiment tracking)
 - Node.js 18+ with npm (only for Web UI)
 - **macOS** (required only for NeuralHash)

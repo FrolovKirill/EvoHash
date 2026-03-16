@@ -9,13 +9,6 @@ const PHF_OPTIONS = [
   { value: 'neuralhash', label: 'NeuralHash', desc: '96-bit, Hamming ≤ 17 (macOS)' },
 ]
 
-const LLM_OPTIONS = [
-  { value: 'openrouter_gpt_oss', label: 'GPT-OSS 120B (OpenRouter)' },
-  { value: 'openrouter_glm4_flash', label: 'GLM-4.7 Flash (OpenRouter)' },
-  { value: 'openrouter_qwen35_35b', label: 'Qwen 3.5 35B-A3B (OpenRouter)' },
-  { value: 'openrouter_qwen35_122b', label: 'Qwen 3.5 122B-A10B (OpenRouter)' },
-]
-
 const DEFAULTS = { phf: 'phash', generations: 50, llm: 'openrouter_gpt_oss', nPairs: 10 }
 
 const STORAGE_KEY = 'evohash_config'
@@ -49,6 +42,11 @@ export default function Dashboard() {
   const [starting, setStarting] = useState(false)
   const [lastRun, setLastRun] = useState<any>(loadLastRun)
   const [clearMsg, setClearMsg] = useState<string | null>(null)
+  const [llmOptions, setLlmOptions] = useState<{key: string, model_id: string, label: string}[]>([])
+
+  useEffect(() => {
+    apiFetch('/api/models').then((d: any) => setLlmOptions(d.models ?? [])).catch(() => {})
+  }, [])
 
   const generationsNum = parseInt(generations) || 0
   const nPairsNum = parseInt(nPairs) || 0
@@ -171,8 +169,8 @@ export default function Dashboard() {
                 value={llm} onChange={(e) => setLlm(e.target.value)}
                 className="w-full bg-dark-2 border border-gray-700 rounded px-3 py-2 text-white text-sm focus:border-brand outline-none"
               >
-                {LLM_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
+                {llmOptions.map((o) => (
+                  <option key={o.key} value={o.key}>{o.label}</option>
                 ))}
               </select>
             </div>
@@ -262,7 +260,7 @@ export default function Dashboard() {
             </div>
             <div>
               <div className="text-gray-500 text-xs mb-1">LLM</div>
-              <div className="text-white">{LLM_OPTIONS.find(o => o.value === lastRun.llm)?.label ?? lastRun.llm}</div>
+              <div className="text-white">{llmOptions.find(o => o.key === lastRun.llm)?.label ?? lastRun.llm}</div>
             </div>
             <div>
               <div className="text-gray-500 text-xs mb-1">Пар</div>

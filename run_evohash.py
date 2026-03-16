@@ -205,17 +205,22 @@ def _load_dotenv(path: Path, env: dict[str, str]) -> None:
 
 
 _PROXY_PORT = 8100
-_PROXY_CONFIGS = {
-    "openrouter_gpt_oss",
-    "openrouter_glm4_flash",
-    "openrouter_qwen35_35b",
-    "openrouter_qwen35_122b",
-}  # LLM configs that route through the proxy
+
+
+def _load_openrouter_models() -> dict[str, str]:
+    """Load key→model_id mapping from config/models.yaml."""
+    import yaml
+    models_file = PROJECT_ROOT / "config" / "models.yaml"
+    if not models_file.exists():
+        return {}
+    with open(models_file) as f:
+        data = yaml.safe_load(f)
+    return {m["key"]: m["model_id"] for m in data.get("models", [])}
 
 
 def _maybe_start_proxy(llm: str) -> subprocess.Popen | None:
     """Start the OpenRouter fixup proxy if needed, wait until it's ready."""
-    if llm not in _PROXY_CONFIGS:
+    if llm not in _load_openrouter_models():
         return None
 
     proxy_script = PROJECT_ROOT / "proxy" / "openrouter_proxy.py"
@@ -269,18 +274,26 @@ def run(
     # so our configs are found before gigaevo's built-in ones.
     custom_config_dir = PROJECT_ROOT / "config"
 
+    # If the LLM is an OpenRouter model, use the single openrouter.yaml
+    # template and inject the model ID via Hydra override.
+    model_id = _load_openrouter_models().get(llm)
+    hydra_llm = "openrouter" if model_id else llm
+
     cmd = [
         sys.executable,
         str(GIGAEVO_DIR / "run.py"),
         "--config-dir", str(custom_config_dir),
         f"problem.name={phf}",
         f"problem.dir={problem_dir}",
-        f"llm={llm}",
+        f"llm={hydra_llm}",
         f"max_generations={max_generations}",
         f"redis.db={redis_db}",
         f"pipeline=with_context",
         f"redis.resume={str(resume).lower()}",
-    ] + overrides
+    ]
+    if model_id:
+        cmd.append(f"llm.models.0.model={model_id}")
+    cmd += overrides
 
     base = dict(os.environ)
     base["_EVOHASH_PHF"] = phf
@@ -291,7 +304,7 @@ def run(
 
     print(f"EvoHash: running evolution for '{phf}'")
     print(f"  Problem dir : {problem_dir}")
-    print(f"  LLM config  : {llm}")
+    print(f"  LLM config  : {llm}" + (f" ({model_id})" if model_id else ""))
     print(f"  Generations : {max_generations}")
     print(f"  Redis DB    : {redis_db}")
     print(f"  Resume      : {resume}")

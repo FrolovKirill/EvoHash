@@ -1,11 +1,10 @@
 # @package _global_
 
-# GPT-OSS 120B via OpenRouter (through local fixup proxy)
-# https://openrouter.ai/openai/gpt-oss-120b
+# Universal OpenRouter config — pass model name via Hydra override:
+#   llm=openrouter llm.models.0.model=qwen/qwen3.5-35b-a3b
 #
-# Requires: python proxy/openrouter_proxy.py  (runs on port 8100)
-# The proxy fixes structured-output responses where the model returns
-# a bare JSON list instead of the expected object wrapper.
+# All requests go through the local fixup proxy (port 8100).
+# Requires: python proxy/openrouter_proxy.py
 
 llm:
   _target_: gigaevo.llm.models.MultiModelRouter

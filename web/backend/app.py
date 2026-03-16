@@ -53,6 +53,17 @@ class RunConfig(BaseModel):
 
 # ─── API Endpoints ─────────────────────────────────────────────────────────────
 
+@app.get("/api/models")
+async def get_models():
+    import yaml
+    models_file = PROJECT_ROOT / "config" / "models.yaml"
+    if not models_file.exists():
+        return {"models": []}
+    with open(models_file) as f:
+        data = yaml.safe_load(f)
+    return {"models": data.get("models", [])}
+
+
 @app.get("/api/status")
 async def get_status():
     return {
