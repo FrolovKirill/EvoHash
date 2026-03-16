@@ -56,3 +56,6 @@ wandb/
 
 # Redis dump
 dump.rdb
+
+# Run logs
+*.log
