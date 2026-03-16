@@ -57,7 +57,7 @@ export default function Results() {
                   </tr>
                 </thead>
                 <tbody>
-                  {programs.map((prog, idx) => (
+                  {programs.filter((p) => p.efficiency > -999).map((prog, idx) => (
                     <tr
                       key={idx}
                       onClick={() => setSelected(selected === idx ? null : idx)}
@@ -65,12 +65,19 @@ export default function Results() {
                         selected === idx ? 'bg-brand/5' : 'hover:bg-dark-2'
                       }`}
                     >
-                      <td className="px-4 py-3 text-gray-500 font-mono">{idx + 1}</td>
+                      <td className="px-4 py-3 text-gray-500 font-mono relative group">
+                        {idx + 1}
+                        <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 z-10 hidden group-hover:block bg-dark-2 border border-gray-700 rounded px-3 py-2 text-xs whitespace-nowrap shadow-lg">
+                          <div className="text-gray-400">Gen <span className="text-white">{prog.generation ?? '?'}</span></div>
+                          <div className="text-gray-400">{prog.parent_id ? <>Parent <span className="text-white font-mono">{prog.parent_id.slice(0, 8)}</span></> : <span className="text-blue-400">seed</span>}</div>
+                          <div className="text-gray-400">ID <span className="text-white font-mono">{(prog.id || '').slice(0, 8)}</span></div>
+                        </div>
+                      </td>
                       <td className="px-4 py-3 text-right font-mono text-brand font-bold">
                         {typeof prog.efficiency === 'number' ? prog.efficiency.toFixed(3) : '—'}
                       </td>
                       <td className="px-4 py-3 text-right font-mono text-green-400">
-                        {typeof prog.asr === 'number' ? `${(prog.asr * 100).toFixed(1)}%` : '—'}
+                        {typeof prog.asr === 'number' ? prog.asr.toFixed(4) : '—'}
                       </td>
                       <td className="px-4 py-3 text-right font-mono text-yellow-400">
                         {typeof prog.l2 === 'number' ? prog.l2.toFixed(3) : '—'}
@@ -98,14 +105,18 @@ export default function Results() {
           {selected !== null && programs[selected]?.code && (
             <div className="w-96 shrink-0">
               <div className="bg-dark-1 rounded border border-gray-800 overflow-hidden">
-                <div className="flex items-center justify-between px-3 py-2 border-b border-gray-800">
-                  <span className="text-xs text-gray-500">Программа #{selected + 1}</span>
-                  <button
-                    onClick={() => downloadProgram(programs[selected], selected)}
-                    className="flex items-center gap-1 text-xs text-gray-500 hover:text-brand transition-all"
-                  >
-                    <Download size={12} /> .py
-                  </button>
+                <div className="px-3 py-2 border-b border-gray-800">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-gray-500">
+                      Gen {programs[selected].generation ?? '?'} · {programs[selected].parent_id ? `from ${programs[selected].parent_id.slice(0, 8)}` : 'seed'}
+                    </span>
+                    <button
+                      onClick={() => downloadProgram(programs[selected], selected)}
+                      className="flex items-center gap-1 text-xs text-gray-500 hover:text-brand transition-all"
+                    >
+                      <Download size={12} /> .py
+                    </button>
+                  </div>
                 </div>
                 <CodeViewer code={programs[selected].code} />
               </div>

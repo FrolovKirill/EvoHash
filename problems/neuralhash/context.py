@@ -4,7 +4,8 @@ Uses Apple's Vision framework via PyObjC (macOS only).
 Requires: pip install pyobjc-framework-Vision pyobjc-core
 """
 
-N_PAIRS_EVAL = 10
+import os as _os
+N_PAIRS_EVAL = int(_os.environ.get("EVOHASH_N_PAIRS", "10"))
 
 
 def build_context() -> dict:

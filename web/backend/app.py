@@ -41,7 +41,8 @@ class RunConfig(BaseModel):
     generations: int = 50
     llm_config: str = "openrouter_gpt_oss"
     n_pairs: int = 10
-    redis_port: int = 6380
+    redis_port: int = 6379
+    redis_db: int = 0
 
 
 # ─── API Endpoints ─────────────────────────────────────────────────────────────
@@ -66,7 +67,9 @@ async def start_run(config: RunConfig):
             phf=config.phf,
             generations=config.generations,
             llm_config=config.llm_config,
+            n_pairs=config.n_pairs,
             redis_port=config.redis_port,
+            redis_db=config.redis_db,
         )
     )
     return {"ok": True, "message": f"Запускаю {config.phf}..."}
@@ -85,14 +88,14 @@ async def get_logs(offset: int = 0):
 
 
 @app.get("/api/programs")
-async def get_programs_endpoint(phf: str = "phash", redis_port: int = 6380):
+async def get_programs_endpoint(phf: str = "phash", redis_port: int = 6379):
     reset_client()
     programs = get_programs(phf, redis_port)
     return {"programs": programs}
 
 
 @app.get("/api/metrics")
-async def get_metrics(phf: str = "phash", redis_port: int = 6380):
+async def get_metrics(phf: str = "phash", redis_port: int = 6379):
     reset_client()
     best = get_best_metrics(phf, redis_port)
     return {"metrics": best}
@@ -169,7 +172,7 @@ async def check_env():
     # Check Redis
     try:
         import redis as redis_lib
-        r = redis_lib.Redis(port=6380, socket_connect_timeout=1)
+        r = redis_lib.Redis(port=6379, socket_connect_timeout=1)
         r.ping()
         checks["redis"] = True
     except Exception:

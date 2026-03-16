@@ -7,7 +7,9 @@ The returned dict is passed as the ``context`` argument to every call of
 
 #: Number of image pairs used per evaluation during evolution.
 #: Keep this small (≤ 20) for fast iteration; the full benchmark uses 100.
-N_PAIRS_EVAL = 10
+#: Overridable via EVOHASH_N_PAIRS env var (set by Web UI / runner).
+import os as _os
+N_PAIRS_EVAL = int(_os.environ.get("EVOHASH_N_PAIRS", "10"))
 
 
 def build_context() -> dict:

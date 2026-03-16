@@ -97,7 +97,8 @@ EvoHash/
 
 ### Web UI (recommended)
 
-The easiest way to run EvoHash is via the built-in web interface:
+The easiest way to run EvoHash is via the built-in web interface.
+Requires Node.js 18+ (for the React frontend build).
 
 ```bash
 pip install -r requirements.txt -r web/backend/requirements.txt
@@ -109,6 +110,7 @@ python web/run_web.py
 ```
 
 The web UI handles dataset download, proxy startup, live log streaming, and metrics charts.
+Flags: `--port PORT`, `--no-browser`, `--dev` (hot-reload).
 
 ### CLI
 

@@ -73,6 +73,7 @@ def init_run(phf_name: str, threshold: int, n_pairs: int) -> str:
     import os
     ts = time.strftime("%Y-%m-%d %H:%M")
     project = os.environ.get("WANDB_PROJECT", "evohash")
+    mode = "disabled" if not os.environ.get("WANDB_API_KEY") else None
     run = wandb.init(
         project=project,
         group=phf_name,
@@ -84,6 +85,7 @@ def init_run(phf_name: str, threshold: int, n_pairs: int) -> str:
             "n_pairs_eval": n_pairs,
         },
         resume="allow",  # reconnect to WANDB_RUN_ID if already set by run_evohash.py
+        mode=mode,
     )
     return run.id
 

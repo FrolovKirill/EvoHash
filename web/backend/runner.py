@@ -42,12 +42,13 @@ class Runner:
             except Exception:
                 pass
 
-    def _has_data(self) -> bool:
+    @staticmethod
+    def _count_images() -> int:
         data_dir = PROJECT_ROOT / "data" / "imagenet_val"
         if not data_dir.exists():
-            return False
+            return 0
         images = list(data_dir.glob("*.JPEG")) + list(data_dir.glob("*.jpg")) + list(data_dir.glob("*.png"))
-        return len(images) >= 10
+        return len(images)
 
     async def _stream_process(self, proc: subprocess.Popen) -> None:
         loop = asyncio.get_event_loop()
@@ -58,17 +59,17 @@ class Runner:
             decoded = line.decode("utf-8", errors="replace").rstrip()
             if decoded:
                 self._emit(decoded)
-                # Parse generation progress
-                if "generation" in decoded.lower() or "iter" in decoded.lower():
+                # Parse generation progress from gigaevo log lines:
+                #   "selecting elites (gen=N, ...)" — emitted each generation
+                #   "Stop: max_generations=N" — final line
+                if "selecting elites (gen=" in decoded:
                     try:
-                        for token in decoded.split():
-                            if token.isdigit():
-                                n = int(token)
-                                if n <= self.total_generations:
-                                    self.generations_done = n
-                                    break
+                        gen_str = decoded.split("gen=")[1].split(",")[0]
+                        self.generations_done = int(gen_str) + 1  # gen is 0-based
                     except Exception:
                         pass
+                elif "Stop: max_generations=" in decoded:
+                    self.generations_done = self.total_generations
 
         await loop.run_in_executor(None, proc.wait)
 
@@ -88,7 +89,8 @@ class Runner:
         except Exception:
             pass
 
-    async def start(self, phf: str, generations: int, llm_config: str, redis_port: int = 6380) -> None:
+    async def start(self, phf: str, generations: int, llm_config: str,
+                    n_pairs: int = 10, redis_port: int = 6379, redis_db: int = 0) -> None:
         if self.status == Status.RUNNING:
             return
 
@@ -106,7 +108,7 @@ class Runner:
         # (resume mode skips archive population — programs never enter the island)
         try:
             import redis as redis_lib
-            r = redis_lib.Redis(port=6379, db=0, socket_connect_timeout=2)
+            r = redis_lib.Redis(port=redis_port, db=redis_db, socket_connect_timeout=2)
             r.flushdb()
             r.close()
         except Exception:
@@ -114,14 +116,33 @@ class Runner:
 
         env = os.environ.copy()
         env["PYTHONPATH"] = str(PROJECT_ROOT) + os.pathsep + str(PROJECT_ROOT / "gigaevo-core")
-        env["EVOHASH_REDIS_PORT"] = str(redis_port)
 
-        # Step 1: download data if needed
-        if not self._has_data():
+        # Load .env so subprocess gets API keys (WANDB_API_KEY, OPENROUTER_API_KEY, etc.)
+        dotenv_path = PROJECT_ROOT / ".env"
+        if dotenv_path.exists():
+            with open(dotenv_path) as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith("#") or "=" not in line:
+                        continue
+                    key, _, value = line.partition("=")
+                    key = key.strip()
+                    value = value.strip().strip('"').strip("'")
+                    if key and key not in env:
+                        env[key] = value
+
+        env["EVOHASH_N_PAIRS"] = str(n_pairs)
+
+        # Step 1: download/top-up images if needed (n_pairs pairs need 2*n_pairs images)
+        needed = n_pairs * 2
+        have = self._count_images()
+        if have < needed:
             self.status = Status.DOWNLOADING
-            self._emit("[web] Датасет не найден, скачиваю синтетические изображения...")
+            want = max(needed, 100)  # download at least 100 to avoid re-downloading often
+            self._emit(f"[web] Нужно {needed} изображений, есть {have} — докачиваю до {want}...")
             dl_proc = subprocess.Popen(
-                [sys.executable, str(PROJECT_ROOT / "scripts" / "download_dataset.py"), "--synthetic", "--n-images", "100"],
+                [sys.executable, str(PROJECT_ROOT / "scripts" / "download_dataset.py"),
+                 "--synthetic", "--n-images", str(want)],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 cwd=str(PROJECT_ROOT),
@@ -146,6 +167,8 @@ class Runner:
             phf,
             "--max-generations", str(generations),
             "--llm", llm_config,
+            "--redis-db", str(redis_db),
+            "--", f"redis.port={redis_port}",
         ]
 
         self.process = subprocess.Popen(

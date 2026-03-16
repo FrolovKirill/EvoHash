@@ -4,6 +4,8 @@
 
 The web interface runs the entire pipeline with one button press: it handles dataset download, streams live logs and metrics, and shows results in a browser.
 
+**Prerequisites:** Python 3.12+, Redis, Node.js 18+ with npm (for the React frontend).
+
 ```bash
 # 1. Install all dependencies
 pip install -r requirements.txt
@@ -25,6 +27,9 @@ python web/run_web.py
 # → opens http://localhost:8765
 ```
 
+> `run_web.py` auto-installs backend pip deps and runs `npm install && npm run build` on first launch.
+> Use `--port PORT` to change the default port, `--no-browser` to suppress auto-open, `--dev` for hot-reload.
+
 The web UI has four pages:
 - **Запуск** — choose PHF, configure generations/pairs, start/stop the run
 - **Монитор** — live colorized logs + efficiency/ASR chart per generation
@@ -41,6 +46,7 @@ The web UI has four pages:
 - Redis server
 - An [OpenRouter](https://openrouter.ai/) API key (for GPT-OSS-120B mutations)
 - A [Weights & Biases](https://wandb.ai/) API key (for experiment tracking)
+- Node.js 18+ with npm (only for Web UI)
 - **macOS** (required only for NeuralHash)
 
 ### 1. Clone and install
