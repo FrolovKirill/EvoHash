@@ -1,22 +1,26 @@
 # Quick Start
 
-## Option A — Web UI (recommended, no Redis required)
+## Option A — Web UI (recommended)
 
-The web interface runs the entire pipeline with one button press: it handles dataset download, starts an embedded Redis (via `fakeredis` — no separate server needed), streams live logs and metrics, and shows results in a browser.
+The web interface runs the entire pipeline with one button press: it handles dataset download, streams live logs and metrics, and shows results in a browser.
 
 ```bash
-# 1. Install backend dependencies
+# 1. Install all dependencies
+pip install -r requirements.txt
 pip install -r web/backend/requirements.txt
 
-# 2. Copy and fill in your API key
-cp .env.example .env
-# edit .env → set OPENROUTER_API_KEY
-
-# 3. Clone GigaEvo (still required)
+# 2. Clone GigaEvo (required)
 git clone https://github.com/FusionBrainLab/gigaevo-core gigaevo-core
 pip install -e gigaevo-core/
 
-# 4. Launch
+# 3. Copy and fill in your API key
+cp .env.example .env
+# edit .env → set OPENROUTER_API_KEY
+
+# 4. Start Redis
+redis-server --daemonize yes
+
+# 5. Launch
 python web/run_web.py
 # → opens http://localhost:8765
 ```
@@ -108,7 +112,7 @@ python scripts/download_dataset.py --synthetic --n-images 30
 
 ### 4. Start Redis
 
-> **Skip this step if you are using the Web UI** — it starts an embedded Redis automatically via `fakeredis`.
+> Redis is required for both CLI and Web UI — the evolution engine stores programs and metrics in Redis.
 
 ```bash
 redis-server --daemonize yes

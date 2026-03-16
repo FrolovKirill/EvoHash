@@ -72,9 +72,28 @@ class Runner:
 
         await loop.run_in_executor(None, proc.wait)
 
-    async def start(self, phf: str, generations: int, llm_config: str, n_pairs: int, redis_port: int = 6380) -> None:
+    @staticmethod
+    def _kill_port(port: int) -> None:
+        """Kill any process listening on the given port (macOS/Linux)."""
+        try:
+            result = subprocess.run(
+                ["lsof", "-ti", f"tcp:{port}"],
+                capture_output=True, text=True
+            )
+            for pid in result.stdout.strip().split():
+                try:
+                    os.kill(int(pid), signal.SIGTERM)
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+    async def start(self, phf: str, generations: int, llm_config: str, redis_port: int = 6380) -> None:
         if self.status == Status.RUNNING:
             return
+
+        # Kill any orphaned proxy from a previous run
+        self._kill_port(8100)
 
         self.status = Status.IDLE
         self.log_lines = []
@@ -109,14 +128,16 @@ class Runner:
         self.status = Status.RUNNING
         self._emit(f"[web] Запускаю эволюцию для {phf}, {generations} поколений...")
 
+        # Use the same interpreter that's running the web server
+        python = sys.executable
+
         cmd = [
-            sys.executable,
+            python,
             str(PROJECT_ROOT / "run_evohash.py"),
-            "--phf", phf,
-            "--generations", str(generations),
+            phf,
+            "--max-generations", str(generations),
             "--llm", llm_config,
-            "--n-pairs", str(n_pairs),
-            "--redis-port", str(redis_port),
+            "--resume",  # always resume to avoid "Redis not empty" error
         ]
 
         self.process = subprocess.Popen(

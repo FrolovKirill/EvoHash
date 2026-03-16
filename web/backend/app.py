@@ -66,7 +66,6 @@ async def start_run(config: RunConfig):
             phf=config.phf,
             generations=config.generations,
             llm_config=config.llm_config,
-            n_pairs=config.n_pairs,
             redis_port=config.redis_port,
         )
     )

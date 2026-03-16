@@ -97,15 +97,18 @@ EvoHash/
 
 ### Web UI (recommended)
 
-The easiest way to run EvoHash is via the built-in web interface — no Redis, no manual CLI steps needed:
+The easiest way to run EvoHash is via the built-in web interface:
 
 ```bash
-pip install -r web/backend/requirements.txt
+pip install -r requirements.txt -r web/backend/requirements.txt
+git clone https://github.com/FusionBrainLab/gigaevo-core gigaevo-core && pip install -e gigaevo-core/
+cp .env.example .env  # add OPENROUTER_API_KEY
+redis-server --daemonize yes
 python web/run_web.py
 # → opens http://localhost:8765
 ```
 
-The web UI handles everything: dataset download, embedded Redis, proxy startup, live log streaming, and metrics charts.
+The web UI handles dataset download, proxy startup, live log streaming, and metrics charts.
 
 ### CLI
 

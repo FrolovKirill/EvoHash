@@ -3,13 +3,15 @@ import { Play, RefreshCw } from 'lucide-react'
 import { apiFetch } from '../hooks/useApi'
 
 interface BaselineRow {
-  name: string
+  attack: string
   phf: string
-  asr: number
-  l2: number
-  n_queries: number
-  efficiency: number
+  asr: string | number
+  l2: string | number
+  queries: string | number
+  efficiency: string | number
 }
+
+function n(v: string | number) { return typeof v === 'string' ? parseFloat(v) : v }
 
 export default function Baselines() {
   const [rows, setRows] = useState<BaselineRow[]>([])
@@ -96,20 +98,20 @@ export default function Baselines() {
                     </tr>
                   </thead>
                   <tbody>
-                    {phfRows.sort((a, b) => b.efficiency - a.efficiency).map((row, i) => (
+                    {phfRows.sort((a, b) => n(b.efficiency) - n(a.efficiency)).map((row, i) => (
                       <tr key={i} className="border-b border-gray-800/50 hover:bg-dark-2 transition-all">
-                        <td className="px-4 py-3 text-white font-mono">{row.name}</td>
+                        <td className="px-4 py-3 text-white font-mono">{row.attack}</td>
                         <td className="px-4 py-3 text-right font-mono text-brand font-bold">
-                          {row.efficiency.toFixed(3)}
+                          {n(row.efficiency).toFixed(4)}
                         </td>
                         <td className="px-4 py-3 text-right font-mono text-green-400">
-                          {(row.asr * 100).toFixed(1)}%
+                          {(n(row.asr) * 100).toFixed(0)}%
                         </td>
                         <td className="px-4 py-3 text-right font-mono text-yellow-400">
-                          {row.l2.toFixed(3)}
+                          {n(row.l2).toFixed(2)}
                         </td>
                         <td className="px-4 py-3 text-right font-mono text-gray-400">
-                          {row.n_queries}
+                          {Math.round(n(row.queries))}
                         </td>
                       </tr>
                     ))}

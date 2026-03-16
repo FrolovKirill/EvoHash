@@ -144,7 +144,7 @@ export default function Dashboard() {
         {!isRunning ? (
           <button
             onClick={handleStart}
-            disabled={starting || !checks?.gigaevo_core}
+            disabled={starting || checks?.gigaevo_core === false}
             className="flex items-center gap-2 px-6 py-3 bg-brand text-black font-bold rounded hover:bg-brand/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all text-sm"
           >
             <Play size={16} />
