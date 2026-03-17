@@ -1,13 +1,10 @@
-"""Shared attack utilities for the PDQ collision problem.
-
-PDQ produces a 256-bit binary hash.  Distance is Hamming distance over 256 bits;
-collision threshold is 92.
-
-This file mirrors problems/phash/helper.py with PDQ-specific documentation.
-"""
+"""Shared utilities for attack implementations."""
 
 import numpy as np
 from PIL import Image
+
+
+# ── Image ↔ array helpers ─────────────────────────────────────────────────────
 
 
 def to_array(image: Image.Image) -> np.ndarray:
@@ -20,18 +17,16 @@ def to_image(array: np.ndarray) -> Image.Image:
     return Image.fromarray(np.clip(array, 0, 255).astype(np.uint8))
 
 
+# ── Perturbation helpers ──────────────────────────────────────────────────────
+
+
 def clamp_perturbation(
     original: np.ndarray,
     perturbed: np.ndarray,
     max_l2: float | None = None,
     max_linf: float | None = None,
 ) -> np.ndarray:
-    """
-    Clamp *perturbed* so that:
-      - pixel values stay in [0, 255]
-      - optionally, the L∞ norm of the perturbation ≤ max_linf
-      - optionally, the normalised L2 norm of the perturbation ≤ max_l2
-    """
+    """Clamp *perturbed* to [0, 255] and optional L2/L∞ constraints."""
     delta = perturbed - original
 
     if max_linf is not None:
@@ -52,6 +47,9 @@ def normalised_l2(original: np.ndarray, perturbed: np.ndarray) -> float:
     return float(np.linalg.norm(diff.flatten()) / np.sqrt(original.size))
 
 
+# ── Attack result helpers ─────────────────────────────────────────────────────
+
+
 def make_metric(
     success: bool,
     original: np.ndarray,
@@ -66,3 +64,17 @@ def make_metric(
         "n_queries": n_queries,
         "final_dist": float(final_dist),
     }
+
+
+# ── Hash query helpers ────────────────────────────────────────────────────────
+
+
+def query_distance(arr: np.ndarray, target_hash, hash_fn) -> float:
+    """Compute hash distance between an array image and a target hash."""
+    img = Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8))
+    return float(hash_fn.distance(hash_fn.compute(img), target_hash))
+
+
+def collides(arr: np.ndarray, target_hash, hash_fn, threshold: int) -> bool:
+    """Check if an array image collides with the target hash."""
+    return query_distance(arr, target_hash, hash_fn) <= threshold

@@ -1,11 +1,90 @@
-"""Fitness evaluator for the PhotoDNA collision attack problem.
+"""Fitness evaluator for the PhotoDNA collision attack problem."""
 
-TODO: Implement once PhotoDNAWrapper is available.
-"""
+from __future__ import annotations
+
+import numpy as np
+from PIL import Image
 
 
-def validate(data: dict, context: dict) -> dict:
-    raise NotImplementedError(
-        "PhotoDNA validation is not yet implemented.  "
-        "See problems/photodna/validate.py."
-    )
+_SENTINEL = {
+    "is_valid": 0.0,
+    "efficiency": -1000.0,
+    "asr": 0.0,
+    "l2": 1_000_000.0,
+    "n_queries": 0.0,
+    "mean_final_dist": 3855.0,
+}
+
+
+def validate(context: dict, data: dict) -> dict:
+    """Evaluate PhotoDNA attack results and return fitness metrics."""
+    if not isinstance(data, dict):
+        return _SENTINEL.copy()
+
+    attacked: list = data.get("attacked_images", [])
+    per_image: list[dict] = data.get("metrics", [])
+    sources: list[Image.Image] = context["source_images"]
+    hash_fn = context["hash_fn"]
+    threshold: int = context["threshold"]
+
+    if not attacked or len(attacked) != len(sources):
+        return _SENTINEL.copy()
+    if len(per_image) != len(sources):
+        return _SENTINEL.copy()
+
+    successes: list[float] = []
+    l2_values: list[float] = []
+    query_counts: list[float] = []
+    final_dists: list[float] = []
+
+    for orig_img, atk_img, m in zip(sources, attacked, per_image):
+        try:
+            orig_arr = np.array(orig_img).astype(float)
+            atk_arr = np.array(atk_img).astype(float)
+
+            atk_pil = atk_img if isinstance(atk_img, Image.Image) else Image.fromarray(
+                np.clip(atk_arr, 0, 255).astype(np.uint8)
+            )
+            atk_hash = hash_fn.compute(atk_pil)
+            target_hash = context["target_hashes"][len(successes)]
+            dist = hash_fn.distance(atk_hash, target_hash)
+            success = float(dist <= threshold)
+
+            l2 = float(
+                np.linalg.norm((atk_arr - orig_arr).flatten())
+                / np.sqrt(orig_arr.size)
+            )
+
+            successes.append(success)
+            l2_values.append(l2)
+            query_counts.append(float(m.get("n_queries", 0)))
+            final_dists.append(float(dist))
+
+        except Exception:
+            successes.append(0.0)
+            l2_values.append(1e6)
+            query_counts.append(0.0)
+            final_dists.append(3855.0)
+
+    asr = float(np.mean(successes))
+    mean_l2 = float(np.mean(l2_values))
+    mean_queries = float(np.mean(query_counts))
+    mean_final_dist = float(np.mean(final_dists))
+    efficiency = asr / (mean_l2 + 1e-6)
+
+    result = {
+        "is_valid": 1.0,
+        "efficiency": efficiency,
+        "asr": asr,
+        "l2": mean_l2,
+        "n_queries": mean_queries,
+        "mean_final_dist": mean_final_dist,
+    }
+
+    try:
+        from evohash.reporter import log_iteration
+        log_iteration(context.get("_report_dir"), context.get("_phf_name", "photodna"), result, context, data)
+    except Exception:
+        pass
+
+    return result

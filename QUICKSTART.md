@@ -47,7 +47,7 @@ The web UI has four pages:
 - An [OpenRouter](https://openrouter.ai/) API key (for LLM mutations — model list in `config/models.yaml`)
 - A [Weights & Biases](https://wandb.ai/) API key (for experiment tracking)
 - Node.js 18+ with npm (only for Web UI)
-- **macOS** (required only for NeuralHash)
+- **onnxruntime** (for NeuralHash, cross-platform)
 
 ### 1. Clone and install
 
@@ -71,14 +71,10 @@ For LPIPS (optional, used in full evaluation):
 pip install torch torchvision lpips
 ```
 
-For **NeuralHash** (macOS only):
+For **NeuralHash** (cross-platform):
 ```bash
-pip install pyobjc-framework-Vision pyobjc-core
-
-# Copy seed matrix from macOS system
-mkdir -p data/neuralhash_model
-cp /System/Library/Frameworks/Vision.framework/Resources/neuralhash_128x96_seed1.dat \
-   data/neuralhash_model/seed1.dat
+pip install onnxruntime
+# Model files (model.onnx + seed1.dat) are included in data/neuralhash_model/
 ```
 
 ### 2. Configure environment
@@ -139,7 +135,7 @@ python run_evohash.py phash
 python run_evohash.py phash --max-generations 100
 python run_evohash.py pdq   --max-generations 50  --redis-db 1
 
-# Evolve NeuralHash attacks (macOS only)
+# Evolve NeuralHash attacks (cross-platform via ONNX)
 python run_evohash.py neuralhash --max-generations 50
 
 # Use a different Redis DB to run multiple PHFs in parallel
@@ -164,7 +160,8 @@ Benchmark all seed strategies (no evolution required):
 ```bash
 python scripts/evaluate.py --phf phash --all-seeds
 python scripts/evaluate.py --phf pdq --all-seeds
-python scripts/evaluate.py --phf neuralhash --all-seeds   # macOS only
+python scripts/evaluate.py --phf neuralhash --all-seeds
+python scripts/evaluate.py --phf photodna --all-seeds     # requires DLL setup
 ```
 
 Evaluate a specific program:
@@ -269,10 +266,10 @@ The notebook is independent of GigaEvo and Redis — it can run in parallel with
 → Run `python scripts/download_dataset.py` first.
 
 **`FileNotFoundError: data/neuralhash_model/seed1.dat`**
-→ Copy the seed file from macOS Vision framework (see Step 1, NeuralHash section).
+→ Model files should be in `data/neuralhash_model/`. They are included in the repo.
 
-**`ImportError: No module named 'Vision'`**
-→ Install PyObjC: `pip install pyobjc-framework-Vision pyobjc-core` (macOS only).
+**`ImportError: No module named 'onnxruntime'`**
+→ Install onnxruntime: `pip install onnxruntime` (or `onnxruntime-gpu` for CUDA).
 
 **`Redis database is not empty`**
 → Either flush it (`redis-cli -n 0 FLUSHDB`) or use `--resume` to continue, or use a different DB (`--redis-db 1`).

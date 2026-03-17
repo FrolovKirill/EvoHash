@@ -4,4 +4,4 @@ from evohash.attacks.nes import run
 
 
 def entrypoint(context: dict) -> dict:
-    return run(context, n_iter=150, n_samples=20, sigma=6.0, lr=3.0)
+    return run(context, n_iter=200, n_samples=20, sigma=6.0, lr=3.0)

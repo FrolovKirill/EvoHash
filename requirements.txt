@@ -11,6 +11,7 @@
 # ── Perceptual hash functions ─────────────────────────────────────────────────
 imagehash>=4.3.1        # pHash via ImageHash library
 pdqhash>=0.2.0          # PDQ hash (Facebook/Meta)
+onnxruntime>=1.16.0     # NeuralHash ONNX inference (cross-platform)
 
 # ── Image processing ──────────────────────────────────────────────────────────
 Pillow>=10.0.0

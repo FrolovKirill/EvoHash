@@ -20,12 +20,12 @@ where **ASR** is the fraction of successful collisions and **mean_L2** is the av
 |------------|-------------|---------------------|---------------------------------------------|
 | pHash      | 64 bits     | Hamming ≤ 12        | ✅ Implemented                              |
 | PDQ        | 256 bits    | Hamming ≤ 92        | ✅ Implemented                              |
-| NeuralHash | 96 bits     | Hamming ≤ 17        | ✅ Implemented (macOS via Vision framework) |
-| PhotoDNA   | 144 floats  | L1 ≤ 3855           | 🚧 Stub (Microsoft proprietary API)         |
+| NeuralHash | 96 bits     | Hamming ≤ 17        | ✅ Implemented (cross-platform, ONNX)       |
+| PhotoDNA   | 144 floats  | L1 ≤ 3855           | ✅ Implemented (Windows DLL / Linux Wine)    |
 
 ## Baselines
 
-All 8 baselines from the paper are implemented for pHash, PDQ, and NeuralHash:
+All 10 baselines are implemented for pHash, PDQ, NeuralHash, and PhotoDNA:
 
 | Attack | Description |
 |--------|-------------|
@@ -59,21 +59,36 @@ EvoHash/
 │   │   ├── base.py             # Abstract PHFWrapper interface
 │   │   ├── phash.py            # pHash (imagehash)
 │   │   ├── pdq.py              # PDQ (pdqhash)
-│   │   ├── neuralhash.py       # NeuralHash (macOS Vision via PyObjC)
-│   │   └── photodna.py         # TODO stub (Microsoft API)
+│   │   ├── neuralhash.py       # NeuralHash (cross-platform ONNX)
+│   │   └── photodna.py         # PhotoDNA (Windows DLL / Linux Wine)
+│   ├── attacks/                # Unified hash-agnostic attack library
+│   │   ├── random_noise.py     # Gaussian noise baseline
+│   │   ├── nes.py              # Natural Evolution Strategies
+│   │   ├── prokos.py           # Frequency-targeted DCT gradient attack
+│   │   ├── simba.py            # Simple Black-box (DCT + block bases)
+│   │   ├── zo_signsgd.py       # Zeroth-order sign gradient descent
+│   │   ├── atkscopes.py        # Multi-scale patch sensitivity
+│   │   ├── hsja.py             # HopSkipJump decision-boundary walk
+│   │   ├── hybrid.py           # Two-stage hybrids (HSJA + refinement)
+│   │   ├── analytical_dct.py   # pHash-specific DCT attack
+│   │   └── utils.py            # Shared helpers (L2, clamp, query)
 │   ├── dataset.py              # ImageNet Val image pair loader
 │   ├── evaluation.py           # ASR, L2, LPIPS, Efficiency, Transferability
 │   └── reporter.py             # W&B experiment tracking (metrics + image grids)
+├── tests/                      # pytest test suite
+│   ├── test_phf_wrappers.py    # PHF wrapper tests (pHash, PDQ, NeuralHash)
+│   ├── test_attacks.py         # Attack interface contract tests
+│   └── test_attack_utils.py    # Attack utility function tests
 ├── problems/
 │   ├── phash/                  # gigaevo problem definition for pHash
 │   │   ├── context.py          # Runtime context (images + hash fn)
 │   │   ├── validate.py         # Fitness evaluator
 │   │   ├── metrics.yaml        # Metric specs (efficiency as primary)
 │   │   ├── task_description.txt # LLM prompt for mutation
-│   │   ├── helper.py           # Shared attack utilities
-│   │   └── initial_programs/   # 10 seed attack strategies
+│   │   └── initial_programs/   # 10 seed attack strategies (thin wrappers)
 │   ├── pdq/                    # Same structure for PDQ
-│   └── neuralhash/             # Same structure for NeuralHash (macOS only)
+│   ├── neuralhash/             # Same structure for NeuralHash
+│   └── photodna/               # Same structure for PhotoDNA
 ├── proxy/
 │   └── openrouter_proxy.py         # Structured-output fixup proxy for OpenRouter
 ├── config/
@@ -90,7 +105,7 @@ EvoHash/
 ## How It Works
 
 1. **Problem definition** — each PHF gets a `problems/<phf>/` directory with a fitness evaluator (`validate.py`) and seed attack programs (`initial_programs/`).
-2. **Evolution** — GigaEvo runs a MAP-Elites evolutionary loop: seed programs are mutated by an LLM (configurable via `config/models.yaml` — GPT-OSS 120B, GLM-4.7 Flash, Qwen 3.5 35B/122B, etc.), evaluated by running them against the PHF, and the best strategies are stored and selected for future mutations. A local proxy (`proxy/openrouter_proxy.py`) automatically fixes structured-output format mismatches between OpenRouter models and GigaEvo's pydantic schemas.
+2. **Evolution** — GigaEvo runs a MAP-Elites evolutionary loop: seed programs are mutated by an LLM (configurable via `config/models.yaml` — GPT-OSS 120B, GLM-4.7 Flash, Qwen 3.5 35B/122B, Mistral Small 2603, etc.), evaluated by running them against the PHF, and the best strategies are stored and selected for future mutations. A local proxy (`proxy/openrouter_proxy.py`) automatically fixes structured-output format mismatches between OpenRouter models and GigaEvo's pydantic schemas.
 3. **Fitness** — the evaluator re-verifies attack success via hash queries (not trusting the program's self-report) and returns `efficiency = ASR / (mean_L2 + ε)`.
 4. **Output** — evolved attack programs are stored in Redis; metrics and image grids are logged to [Weights & Biases](https://wandb.ai/) in real time. Use `scripts/show_best.py` to export top programs from Redis.
 
@@ -131,8 +146,7 @@ See [QUICKSTART.md](QUICKSTART.md) for the full manual setup.
 
 ## Limitations
 
-- **PhotoDNA**: Requires a Microsoft API licence. See `evohash/phf/photodna.py`.
-- **NeuralHash**: macOS only (uses Apple Vision framework via PyObjC). Requires `pip install pyobjc-framework-Vision pyobjc-core` and copying `neuralhash_128x96_seed1.dat` from `/System/Library/Frameworks/Vision.framework/Resources/`.
+- **PhotoDNA**: Requires extracting `PhotoDNAx64.dll` from the FTK ISO. On Linux/macOS uses Wine. Run `from evohash.phf.photodna import setup_photodna; setup_photodna()` for automated setup.
 - **GigaChat-2-Max**: Not yet integrated (not available on OpenRouter).
 - **Dataset**: ImageNet-1k requires a HuggingFace account and acceptance of the dataset licence. The download script falls back to Tiny-ImageNet or synthetic images.
 

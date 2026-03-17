@@ -25,8 +25,8 @@ data/imagenet_val/
 data/*.tar
 data/*.zip
 
-# NeuralHash model files (Apple-proprietary, extract locally from macOS)
-data/neuralhash_model/
+# NeuralHash model files (ONNX, committed to repo)
+# data/neuralhash_model/
 
 # Experiment outputs
 outputs/

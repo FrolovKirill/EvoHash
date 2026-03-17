@@ -1,18 +1,39 @@
 """Runtime context for the PhotoDNA collision attack problem.
 
-TODO: PhotoDNA is proprietary (Microsoft).  Access requires a partnership
-      agreement or API key from the Microsoft PhotoDNA Cloud Service.
-      Once access is obtained:
-
-      1. Implement ``PhotoDNAWrapper.compute`` and ``PhotoDNAWrapper.distance``
-         in ``evohash/phf/photodna.py``.
-      2. Replace the ``build_context`` body below to instantiate the wrapper.
-      3. Remove this TODO comment.
+gigaevo calls ``build_context()`` once before evaluating any program.
 """
+
+import os as _os
+N_PAIRS_EVAL = int(_os.environ.get("EVOHASH_N_PAIRS", "10"))
 
 
 def build_context() -> dict:
-    raise NotImplementedError(
-        "PhotoDNA is not yet supported.  "
-        "See evohash/phf/photodna.py and problems/photodna/context.py."
-    )
+    """Build and return the shared context for PhotoDNA attack evaluation."""
+    import evohash
+    from pathlib import Path
+    from evohash.dataset import load_image_pairs
+    from evohash.phf.photodna import PhotoDNAWrapper
+
+    data_dir = Path(evohash.__file__).parent.parent / "data" / "imagenet_val"
+
+    phf = PhotoDNAWrapper()
+
+    from evohash.dataset import get_generation_seed
+    seed = get_generation_seed("photodna")
+    pairs = load_image_pairs(data_dir, n_pairs=N_PAIRS_EVAL, seed=seed)
+    sources = [p[0] for p in pairs]
+    targets = [p[1] for p in pairs]
+    target_hashes = [phf.compute(img) for img in targets]
+
+    from evohash.reporter import init_run
+    init_run("photodna", phf.threshold, N_PAIRS_EVAL)
+
+    return {
+        "hash_fn": phf,
+        "threshold": phf.threshold,
+        "source_images": sources,
+        "target_hashes": target_hashes,
+        "target_images": targets,
+        "_report_dir": None,
+        "_phf_name": "photodna",
+    }

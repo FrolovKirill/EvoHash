@@ -1,7 +1,7 @@
 """Runtime context for the NeuralHash collision attack problem.
 
-Uses Apple's Vision framework via PyObjC (macOS only).
-Requires: pip install pyobjc-framework-Vision pyobjc-core
+Uses ONNX model (cross-platform).
+Requires: pip install onnxruntime
 """
 
 import os as _os
