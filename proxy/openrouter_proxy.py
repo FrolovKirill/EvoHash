@@ -10,7 +10,11 @@ This proxy:
   3. If the model returned ``[...]`` where an object was expected, wraps
      the list into ``{"<field>": [...]}`` using the schema to pick the
      right field name.
-  4. Everything else passes through untouched.
+  4. If the response was truncated (finish_reason=length), retries with
+     doubled max_tokens.
+  5. If the structured output contains a ``code`` field with invalid Python
+     (SyntaxError), retries the request (up to MAX_RETRIES times).
+  6. Everything else passes through untouched.
 
 Usage::
 
@@ -34,6 +38,8 @@ from aiohttp import ClientSession, web
 
 UPSTREAM = "https://openrouter.ai"
 DEFAULT_PORT = 8100
+MAX_RETRIES = 2  # up to 3 attempts total
+MIN_RETRY_TEMPERATURE = 0.1  # floor for temperature on retry
 
 log = logging.getLogger("openrouter-proxy")
 
@@ -101,7 +107,89 @@ def _fix_content(content: str, schema: dict) -> str | None:
     return wrapped
 
 
+# ── Response analysis ─────────────────────────────────────────────────────────
+
+def _is_truncated(data: dict) -> bool:
+    """Check if any choice has finish_reason=length (truncated output)."""
+    for choice in data.get("choices", []):
+        if choice.get("finish_reason") == "length":
+            return True
+    return False
+
+
+def _has_code_syntax_error(data: dict) -> bool:
+    """Check if structured output has a ``code`` field with invalid Python."""
+    for choice in data.get("choices", []):
+        content = choice.get("message", {}).get("content")
+        if not content:
+            continue
+        try:
+            parsed = json.loads(content)
+        except (json.JSONDecodeError, TypeError):
+            continue
+        if not isinstance(parsed, dict):
+            continue
+        code = parsed.get("code")
+        if not isinstance(code, str) or not code.strip():
+            continue
+        try:
+            compile(code, "<proxy-check>", "exec")
+        except SyntaxError:
+            return True
+    return False
+
+
+# ── Retry logic ───────────────────────────────────────────────────────────────
+
+def _should_retry(resp_data: dict, schema: dict | None) -> str | None:
+    """Return a retry reason string, or None if no retry needed."""
+    if _is_truncated(resp_data):
+        return "truncated"
+    # Only check for code syntax errors in structured-output requests
+    if schema is not None and _has_code_syntax_error(resp_data):
+        return "syntax_error"
+    return None
+
+
+def _adjust_request_for_retry(request_body: dict, reason: str) -> dict:
+    """Return a modified copy of the request body for the retry attempt."""
+    body = json.loads(json.dumps(request_body))  # deep copy
+
+    if reason == "truncated":
+        old_max = body.get("max_tokens") or body.get("max_completion_tokens") or 81920
+        body["max_tokens"] = old_max * 2
+        # Also set max_completion_tokens for newer API format
+        if "max_completion_tokens" in body:
+            body["max_completion_tokens"] = old_max * 2
+        log.info("Retry: doubling max_tokens %d → %d", old_max, old_max * 2)
+
+    if reason == "syntax_error":
+        temp = body.get("temperature", 0)
+        if temp < MIN_RETRY_TEMPERATURE:
+            body["temperature"] = MIN_RETRY_TEMPERATURE
+            log.info("Retry: bumping temperature %s → %s", temp, MIN_RETRY_TEMPERATURE)
+
+    return body
+
+
 # ── Proxy handler ─────────────────────────────────────────────────────────────
+
+async def _send_upstream(
+    session: ClientSession,
+    method: str,
+    url: str,
+    headers: dict,
+    body: bytes,
+) -> tuple[int, dict, bytes]:
+    """Send a request to upstream and return (status, headers, body)."""
+    async with session.request(method, url, headers=headers, data=body) as resp:
+        resp_body = await resp.read()
+        resp_headers = {
+            k: v for k, v in resp.headers.items()
+            if k.lower() not in ("transfer-encoding", "content-encoding", "content-length")
+        }
+        return resp.status, resp_headers, resp_body
+
 
 async def _proxy_handler(request: web.Request) -> web.Response:
     """Forward request to OpenRouter, optionally fix the response."""
@@ -128,29 +216,52 @@ async def _proxy_handler(request: web.Request) -> web.Response:
         except json.JSONDecodeError:
             pass
 
-    # Forward to upstream
-    async with session.request(
-        request.method,
-        upstream_url,
-        headers=headers,
-        data=body,
-    ) as upstream_resp:
-        resp_body = await upstream_resp.read()
-        resp_headers = {
-            k: v for k, v in upstream_resp.headers.items()
-            if k.lower() not in ("transfer-encoding", "content-encoding", "content-length")
-        }
+    is_chat = request.path.rstrip("/").endswith("/chat/completions")
 
-        # Log and fix chat completion responses
-        is_chat = request.path.rstrip("/").endswith("/chat/completions")
-        if is_chat and upstream_resp.status == 200:
-            resp_body = _log_and_fix_response(resp_body, schema)
+    # Send initial request
+    status, resp_headers, resp_body = await _send_upstream(
+        session, request.method, upstream_url, headers, body,
+    )
 
-        return web.Response(
-            status=upstream_resp.status,
-            headers=resp_headers,
-            body=resp_body,
-        )
+    # Retry loop for chat completions
+    if is_chat and status == 200 and request_body is not None:
+        resp_body = _log_and_fix_response(resp_body, schema)
+
+        for attempt in range(1, MAX_RETRIES + 1):
+            try:
+                resp_data = json.loads(resp_body)
+            except json.JSONDecodeError:
+                break
+
+            reason = _should_retry(resp_data, schema)
+            if reason is None:
+                break
+
+            adjusted = _adjust_request_for_retry(request_body, reason)
+            adjusted_body = json.dumps(adjusted, ensure_ascii=False).encode()
+
+            log.warning(
+                "Retry %d/%d reason=%s model=%s",
+                attempt, MAX_RETRIES, reason, resp_data.get("model", "?"),
+            )
+
+            status, resp_headers, resp_body = await _send_upstream(
+                session, request.method, upstream_url, headers, adjusted_body,
+            )
+
+            if status == 200:
+                resp_body = _log_and_fix_response(resp_body, schema)
+            else:
+                log.warning("Retry %d returned status %d, keeping previous response", attempt, status)
+                break
+    elif is_chat and status == 200:
+        resp_body = _log_and_fix_response(resp_body, schema)
+
+    return web.Response(
+        status=status,
+        headers=resp_headers,
+        body=resp_body,
+    )
 
 
 def _log_and_fix_response(resp_body: bytes, schema: dict | None) -> bytes:

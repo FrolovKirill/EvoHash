@@ -228,11 +228,14 @@ def _maybe_start_proxy(llm: str) -> subprocess.Popen | None:
         print(f"WARNING: proxy script not found at {proxy_script}", file=sys.stderr)
         return None
 
+    proxy_log = PROJECT_ROOT / "proxy_stderr.log"
+    proxy_log_fh = open(proxy_log, "w")
     proc = subprocess.Popen(
-        [sys.executable, str(proxy_script), "--port", str(_PROXY_PORT)],
+        [sys.executable, str(proxy_script), "--port", str(_PROXY_PORT), "-v"],
         stdout=subprocess.DEVNULL,
-        stderr=subprocess.PIPE,
+        stderr=proxy_log_fh,
     )
+    proc._proxy_log_fh = proxy_log_fh  # prevent GC closing the file
 
     # Wait for proxy to be ready (up to 5 seconds)
     import time
