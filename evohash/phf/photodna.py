@@ -46,8 +46,17 @@ _DEFAULT_WORK_DIR = (
     os.environ.get("PHOTODNA_WORK_DIR")
     or os.path.join(os.path.expanduser("~"), ".cache", "photodna")
 )
-_DEFAULT_DLL_PATH = os.environ.get("PHOTODNA_DLL", "")
+# DLL bundled in repo at data/photodna/PhotoDNAx64.dll
+_BUNDLED_DLL = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), os.pardir, os.pardir,
+    "data", "photodna", "PhotoDNAx64.dll",
+)
+_DEFAULT_DLL_PATH = (
+    os.environ.get("PHOTODNA_DLL", "")
+    or (_BUNDLED_DLL if os.path.isfile(_BUNDLED_DLL) else "")
+)
 _WINE_PYTHON_SUBPATH = "python-3.9.12-embed-amd64/python.exe"
+_WINE_CMD = shutil.which("wine64") or shutil.which("wine") or "wine64"
 
 # ---------------------------------------------------------------------------
 # generateHashes.py — Wine subprocess helper
@@ -158,7 +167,7 @@ class _WineBackend:
 
     def _run(self, args: list[str], timeout: int = 120) -> str:
         result = subprocess.run(
-            ["wine64", self._wine_python, self._script, *args],
+            [_WINE_CMD, self._wine_python, self._script, *args],
             capture_output=True, text=True, timeout=timeout,
             env={**os.environ, "WINEDEBUG": "-all"},
         )
