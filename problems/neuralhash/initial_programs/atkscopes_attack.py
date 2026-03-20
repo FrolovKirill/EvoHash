@@ -1,7 +1,10 @@
-"""AtkScopes multi-scale patch attack — thin wrapper."""
+"""ATKScopes per-coordinate Adam attack — thin wrapper.
+
+Reference: Zhang et al., USENIX Security 2025.
+"""
 
 from evohash.attacks.atkscopes import run
 
 
 def entrypoint(context: dict) -> dict:
-    return run(context, n_outer=8, scales=[56, 28, 14])
+    return run(context, scale="pixel", n_iter=600, lr=0.05, a=0.1)
