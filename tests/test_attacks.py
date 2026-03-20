@@ -87,7 +87,7 @@ class TestAtkscopes:
     def test_run(self, phash_wrapper, rng):
         from evohash.attacks.atkscopes import run
         ctx = _make_context(phash_wrapper, rng)
-        result = run(ctx, scales=[32], n_outer=2)
+        result = run(ctx, scale="global", n_iter=3)
         _check_result(result)
 
 
@@ -96,6 +96,24 @@ class TestHSJA:
         from evohash.attacks.hsja import run
         ctx = _make_context(phash_wrapper, rng)
         result = run(ctx, n_iter=3)
+        _check_result(result)
+
+
+class TestHSJAv2:
+    def test_run(self, phash_wrapper, rng):
+        from evohash.attacks.hsja import run_v2
+        ctx = _make_context(phash_wrapper, rng)
+        result = run_v2(ctx, n_iter=3, bs_steps=3, grad_samples=5,
+                        init_max_tries=50)
+        _check_result(result)
+
+
+class TestZOSignSGDv2:
+    def test_run(self, phash_wrapper, rng):
+        from evohash.attacks.zo_signsgd import run_v2
+        ctx = _make_context(phash_wrapper, rng)
+        result = run_v2(ctx, n_iter=3, n_samples=2, mu=4.0, lr=2.0,
+                        momentum=0.5)
         _check_result(result)
 
 

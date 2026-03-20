@@ -44,44 +44,44 @@ def _block_basis(height, width, block_h, block_w, row, col, channel):
 
 
 def _attack_single_dct(img, target_hash, hash_fn, threshold,
-                       n_iter=200, step_size=12.0, n_candidates=10):
-    """SimBa with DCT basis."""
+                       n_iter=600, step_size=12.0):
+    """SimBa with DCT basis — deterministic permutation without replacement."""
     orig = np.array(img).astype(np.float32)
     H, W, _ = orig.shape
     current = orig.copy()
     best_dist = hash_fn.distance(hash_fn.compute(img), target_hash)
     n_queries = 1
 
+    # Build full index set: (basis_index, channel) and permute once
+    rng = np.random.default_rng()
     max_basis = H * W
-    basis_indices = np.random.randint(0, max_basis, size=(n_iter, n_candidates))
-    channel_indices = np.random.randint(0, 3, size=(n_iter, n_candidates))
+    all_indices = [(k, c) for c in range(3) for k in range(max_basis)]
+    order = rng.permutation(len(all_indices))
 
-    for i in range(n_iter):
-        if best_dist <= threshold:
+    steps_done = 0
+    for idx in order:
+        if best_dist <= threshold or steps_done >= n_iter:
             break
-        for j in range(n_candidates):
-            k = int(basis_indices[i, j])
-            c = int(channel_indices[i, j])
-            basis = _dct_basis(H, W, k, c)
+        k, c = all_indices[idx]
+        basis = _dct_basis(H, W, k, c)
 
-            pos = np.clip(current + step_size * basis, 0, 255)
-            neg = np.clip(current - step_size * basis, 0, 255)
+        pos = np.clip(current + step_size * basis, 0, 255)
+        neg = np.clip(current - step_size * basis, 0, 255)
 
-            d_pos = hash_fn.distance(
-                hash_fn.compute(Image.fromarray(pos.astype(np.uint8))), target_hash)
-            d_neg = hash_fn.distance(
-                hash_fn.compute(Image.fromarray(neg.astype(np.uint8))), target_hash)
-            n_queries += 2
+        d_pos = hash_fn.distance(
+            hash_fn.compute(Image.fromarray(pos.astype(np.uint8))), target_hash)
+        d_neg = hash_fn.distance(
+            hash_fn.compute(Image.fromarray(neg.astype(np.uint8))), target_hash)
+        n_queries += 2
 
-            if d_pos < best_dist:
-                best_dist = d_pos
-                current = pos
-            elif d_neg < best_dist:
-                best_dist = d_neg
-                current = neg
+        if d_pos < best_dist:
+            best_dist = d_pos
+            current = pos
+        elif d_neg < best_dist:
+            best_dist = d_neg
+            current = neg
 
-            if best_dist <= threshold:
-                break
+        steps_done += 1
 
     l2 = normalised_l2(orig, current)
     return Image.fromarray(current.astype(np.uint8)), {
@@ -93,8 +93,8 @@ def _attack_single_dct(img, target_hash, hash_fn, threshold,
 
 
 def _attack_single_block(img, target_hash, hash_fn, threshold,
-                         n_iter=300, step_size=16.0, block_size=16):
-    """SimBa with pixel-block basis (better for PDQ)."""
+                         n_iter=600, step_size=16.0, block_size=16):
+    """SimBa with pixel-block basis — deterministic permutation (better for PDQ)."""
     orig = np.array(img).astype(np.float32)
     H, W, _ = orig.shape
     current = orig.copy()
@@ -104,13 +104,16 @@ def _attack_single_block(img, target_hash, hash_fn, threshold,
     row_starts = list(range(0, H, block_size))
     col_starts = list(range(0, W, block_size))
 
-    for _ in range(n_iter):
-        if best_dist <= threshold:
-            break
+    # Build full index set and permute once (no replacement)
+    rng = np.random.default_rng()
+    all_indices = [(r, c, ch) for r in row_starts for c in col_starts for ch in range(3)]
+    order = rng.permutation(len(all_indices))
 
-        row = row_starts[np.random.randint(len(row_starts))]
-        col = col_starts[np.random.randint(len(col_starts))]
-        ch = np.random.randint(3)
+    steps_done = 0
+    for idx in order:
+        if best_dist <= threshold or steps_done >= n_iter:
+            break
+        row, col, ch = all_indices[idx]
 
         basis = _block_basis(H, W, block_size, block_size, row, col, ch)
 
@@ -129,6 +132,8 @@ def _attack_single_block(img, target_hash, hash_fn, threshold,
         elif d_neg < best_dist:
             best_dist = d_neg
             current = neg
+
+        steps_done += 1
 
     l2 = normalised_l2(orig, current)
     return Image.fromarray(current.astype(np.uint8)), {
@@ -151,12 +156,14 @@ def simba_refine_single(source, start, target_hash, hash_fn, threshold,
     q = 1
 
     max_basis = H * W
-    basis_indices = np.random.randint(0, max_basis, size=n_iter)
-    channel_indices = np.random.randint(0, 3, size=n_iter)
+    rng = np.random.default_rng()
+    all_indices = [(k, c) for c in range(3) for k in range(max_basis)]
+    order = rng.permutation(len(all_indices))[:n_iter]
 
-    for i in range(n_iter):
+    for i, idx in enumerate(order):
+        k_ref, c_ref = all_indices[idx]
         if best_dist > threshold:
-            basis = _dct_basis(H, W, int(basis_indices[i]), int(channel_indices[i]))
+            basis = _dct_basis(H, W, k_ref, c_ref)
             pos = np.clip(current + step_size * basis, 0, 255)
             neg = np.clip(current - step_size * basis, 0, 255)
             d_pos = hash_fn.distance(

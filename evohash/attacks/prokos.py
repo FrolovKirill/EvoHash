@@ -29,7 +29,13 @@ def _frequency_weight_mask(h, w, cutoff_ratio=0.35):
 
 
 def _attack_single(img, target_hash, hash_fn, threshold,
-                   n_iter=120, n_freq_samples=25, lr=5.0, sigma=3.0):
+                   n_iter=120, n_freq_samples=25, lr=5.0, sigma=3.0,
+                   momentum=0.5):
+    """Prokos frequency-targeted gradient attack with momentum.
+
+    Args:
+        momentum: momentum coefficient ρ (0 = no momentum, 0.5 = default from paper)
+    """
     orig = np.array(img).astype(np.float32)
     H, W, C = orig.shape
     current = orig.copy()
@@ -38,6 +44,7 @@ def _attack_single(img, target_hash, hash_fn, threshold,
     n_queries = 1
 
     freq_mask = _frequency_weight_mask(H, W)
+    momentum_buf = np.zeros((H, W, C), dtype=np.float32)
 
     for _ in range(n_iter):
         if best_dist <= threshold:
@@ -74,7 +81,15 @@ def _attack_single(img, target_hash, hash_fn, threshold,
         for c in range(C):
             grad_spatial[:, :, c] = idctn(grad_dct[:, :, c], type=2, norm="ortho")
 
-        current = np.clip(current - lr * grad_spatial, 0, 255)
+        # Gradient normalization
+        grad_norm = np.linalg.norm(grad_spatial.flatten())
+        if grad_norm > 1e-12:
+            grad_spatial /= grad_norm
+
+        # Momentum update: m = ρ*m + (1-ρ)*g
+        momentum_buf = momentum * momentum_buf + (1.0 - momentum) * grad_spatial
+
+        current = np.clip(current - lr * momentum_buf, 0, 255)
 
         dist = hash_fn.distance(
             hash_fn.compute(Image.fromarray(current.astype(np.uint8))), target_hash)
