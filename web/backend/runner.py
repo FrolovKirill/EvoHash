@@ -205,7 +205,25 @@ class Runner:
     def stop(self) -> None:
         if self.process and self.process.poll() is None:
             try:
-                os.killpg(os.getpgid(self.process.pid), signal.SIGTERM)
+                # GigaEvo spawns exec_runner workers with start_new_session=True,
+                # so they get their own process groups and survive a killpg on the
+                # parent.  Walk the full process tree with psutil and SIGKILL every
+                # descendant before killing the parent.
+                import psutil
+                try:
+                    parent = psutil.Process(self.process.pid)
+                    children = parent.children(recursive=True)
+                except psutil.NoSuchProcess:
+                    children = []
+                for child in children:
+                    try:
+                        child.kill()
+                    except psutil.NoSuchProcess:
+                        pass
+                try:
+                    os.killpg(os.getpgid(self.process.pid), signal.SIGKILL)
+                except Exception:
+                    self.process.kill()
             except Exception:
                 self.process.terminate()
             self._emit("[web] Остановлено пользователем")

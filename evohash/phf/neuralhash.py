@@ -71,6 +71,15 @@ class _OnnxSession:
         self._session = None
         self._input_name = None
 
+    # cloudpickle support: InferenceSession is not picklable — drop it and
+    # let the lazy-loader recreate it after deserialization.
+    def __getstate__(self):
+        return {}  # nothing to persist; _load() will recreate on next run()
+
+    def __setstate__(self, state):
+        self._session = None
+        self._input_name = None
+
     def _load(self) -> None:
         if self._session is not None:
             return

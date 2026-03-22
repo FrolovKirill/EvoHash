@@ -6,7 +6,8 @@ import StatusBadge from '../components/StatusBadge'
 const PHF_OPTIONS = [
   { value: 'phash', label: 'pHash', desc: '64-bit, Hamming ≤ 12' },
   { value: 'pdq', label: 'PDQ', desc: '256-bit, Hamming ≤ 92' },
-  { value: 'neuralhash', label: 'NeuralHash', desc: '96-bit, Hamming ≤ 17 (macOS)' },
+  { value: 'neuralhash', label: 'NeuralHash', desc: '96-bit, Hamming ≤ 17' },
+  { value: 'photodna', label: 'PhotoDNA', desc: '144-byte, L1 ≤ 3855 (Docker)' },
 ]
 
 const DEFAULTS = { phf: 'phash', generations: 50, llm: 'openrouter_gpt_oss', nPairs: 10 }

@@ -45,6 +45,11 @@ from PIL import Image
 
 from .base import PHFWrapper
 
+# Module-level singleton: one Docker container per exec_runner worker process.
+# GigaEvo runs persistent worker processes that handle multiple tasks; without
+# this singleton each task would start its own container (~25 s Wine init).
+_docker_singleton: _DockerBackend | None = None  # type: ignore[name-defined]  # forward ref
+
 # ---------------------------------------------------------------------------
 # Platform detection & defaults
 # ---------------------------------------------------------------------------
@@ -310,7 +315,8 @@ class _DockerBackend:
 
         print(f"[PhotoDNA] Building Docker image '{self._image}' (first-time, ~1 min)...")
         subprocess.run(
-            ["docker", "build", "-t", self._image, self._docker_dir],
+            ["docker", "build", "--platform", "linux/amd64",
+             "-t", self._image, self._docker_dir],
             check=True,
         )
         print(f"[PhotoDNA] Docker image '{self._image}' ready.")
@@ -521,6 +527,16 @@ class PhotoDNAWrapper(PHFWrapper):
         self._docker_image = docker_image
         self._backend: _WindowsBackend | _WineBackend | _DockerBackend | None = None
 
+    # cloudpickle support: backends contain unpicklable objects (Popen, ctypes).
+    # Drop _backend on pickle; it is re-resolved lazily on first compute().
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        state["_backend"] = None
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+
     def _resolve(self) -> None:
         if self._backend is not None:
             return
@@ -536,17 +552,23 @@ class PhotoDNAWrapper(PHFWrapper):
                 self._backend = _WineBackend(self._work_dir)
             except RuntimeError:
                 # Wine found but not set up (no Wine Python) — fall back to Docker
-                self._backend = _DockerBackend(
-                    dll_path=self._dll_path or _BUNDLED_DLL,
-                    docker_dir=_DOCKER_DIR,
-                    image=self._docker_image,
-                )
+                self._backend = self._get_docker_singleton()
         else:
-            self._backend = _DockerBackend(
+            self._backend = self._get_docker_singleton()
+
+    def _get_docker_singleton(self) -> _DockerBackend:
+        """Return a process-wide Docker backend (one container per worker)."""
+        global _docker_singleton
+        if _docker_singleton is None or (
+            _docker_singleton._proc is not None
+            and _docker_singleton._proc.poll() is not None
+        ):
+            _docker_singleton = _DockerBackend(
                 dll_path=self._dll_path or _BUNDLED_DLL,
                 docker_dir=_DOCKER_DIR,
                 image=self._docker_image,
             )
+        return _docker_singleton
 
     @property
     def name(self) -> str:
