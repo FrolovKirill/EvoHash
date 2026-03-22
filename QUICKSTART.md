@@ -268,6 +268,12 @@ The notebook is independent of GigaEvo and Redis — it can run in parallel with
 **`FileNotFoundError: data/neuralhash_model/seed1.dat`**
 → Model files should be in `data/neuralhash_model/`. They are included in the repo.
 
+**PhotoDNA on macOS: `Docker run failed`**
+→ Make sure Docker Desktop is running. The image `evohash-photodna` is built automatically on first compute() call (~1 min). Subsequent calls are fast.
+
+**PhotoDNA on Linux: `[PhotoDNA] Not set up`**
+→ Either install Wine and run `setup_photodna()`, or install Docker — the Docker backend is used automatically if Wine Python is not set up.
+
 **`ImportError: No module named 'onnxruntime'`**
 → Install onnxruntime: `pip install onnxruntime` (or `onnxruntime-gpu` for CUDA).
 

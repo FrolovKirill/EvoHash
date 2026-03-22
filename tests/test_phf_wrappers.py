@@ -1,4 +1,4 @@
-"""Tests for PHF wrappers: pHash, PDQ, NeuralHash."""
+"""Tests for PHF wrappers: pHash, PDQ, NeuralHash, PhotoDNA."""
 
 import numpy as np
 import pytest
@@ -135,3 +135,61 @@ class TestNeuralHash:
         h1 = neuralhash_wrapper.compute(image_pair[0])
         h2 = neuralhash_wrapper.compute(image_pair[1])
         assert neuralhash_wrapper.distance(h1, h2) == neuralhash_wrapper.distance(h2, h1)
+
+
+# ---------------------------------------------------------------------------
+# PhotoDNA
+# ---------------------------------------------------------------------------
+
+@pytest.mark.photodna
+class TestPhotoDNA:
+    """End-to-end tests for PhotoDNA wrapper.
+
+    Marked with @pytest.mark.photodna so they can be skipped when Docker /
+    Wine is not available: pytest -m "not photodna"
+    """
+
+    def test_compute_shape(self, photodna_wrapper, sample_image):
+        h = photodna_wrapper.compute(sample_image)
+        assert isinstance(h, np.ndarray)
+        assert h.shape == (144,)
+        assert h.dtype == np.uint8
+
+    def test_identical_images_zero_distance(self, photodna_wrapper, sample_image):
+        h1 = photodna_wrapper.compute(sample_image)
+        h2 = photodna_wrapper.compute(sample_image)
+        assert photodna_wrapper.distance(h1, h2) == 0.0
+
+    def test_threshold(self, photodna_wrapper):
+        assert photodna_wrapper.threshold == 3855
+
+    def test_name(self, photodna_wrapper):
+        assert photodna_wrapper.name == "PhotoDNA"
+
+    def test_is_collision_self(self, photodna_wrapper, sample_image):
+        h = photodna_wrapper.compute(sample_image)
+        assert photodna_wrapper.is_collision(h, h)
+
+    def test_distance_symmetric(self, photodna_wrapper, image_pair):
+        h1 = photodna_wrapper.compute(image_pair[0])
+        h2 = photodna_wrapper.compute(image_pair[1])
+        assert photodna_wrapper.distance(h1, h2) == photodna_wrapper.distance(h2, h1)
+
+    def test_distance_range(self, photodna_wrapper, image_pair):
+        h1 = photodna_wrapper.compute(image_pair[0])
+        h2 = photodna_wrapper.compute(image_pair[1])
+        # L1 distance over 144 bytes in [0,255]: max = 144*255 = 36720
+        assert 0 <= photodna_wrapper.distance(h1, h2) <= 36720
+
+    def test_compute_batch_matches_single(self, photodna_wrapper, image_pair):
+        a, b = image_pair
+        batch = photodna_wrapper.compute_batch([a, b])
+        assert len(batch) == 2
+        assert np.array_equal(batch[0], photodna_wrapper.compute(a))
+        assert np.array_equal(batch[1], photodna_wrapper.compute(b))
+
+    def test_numpy_array_input(self, photodna_wrapper, sample_image):
+        """Wrapper should accept numpy arrays, not just PIL Images."""
+        arr = np.array(sample_image)
+        h = photodna_wrapper.compute(arr)
+        assert h.shape == (144,)

@@ -42,3 +42,9 @@ def pdq_wrapper():
 def neuralhash_wrapper():
     from evohash.phf.neuralhash import NeuralHashWrapper
     return NeuralHashWrapper()
+
+
+@pytest.fixture()
+def photodna_wrapper():
+    from evohash.phf.photodna import PhotoDNAWrapper
+    return PhotoDNAWrapper()

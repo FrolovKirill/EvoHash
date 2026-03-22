@@ -146,7 +146,7 @@ See [QUICKSTART.md](QUICKSTART.md) for the full manual setup.
 
 ## Limitations
 
-- **PhotoDNA**: Requires extracting `PhotoDNAx64.dll` from the FTK ISO. On Linux/macOS uses Wine. Run `from evohash.phf.photodna import setup_photodna; setup_photodna()` for automated setup.
+- **PhotoDNA**: On Windows, requires `PhotoDNAx64.dll` (bundled in `data/photodna/`). On macOS, uses a Docker container with Wine — Docker Desktop must be running (image builds automatically on first use). On Linux with Wine set up, uses Wine directly.
 - **GigaChat-2-Max**: Not yet integrated (not available on OpenRouter).
 - **Dataset**: ImageNet-1k requires a HuggingFace account and acceptance of the dataset licence. The download script falls back to Tiny-ImageNet or synthetic images.
 
