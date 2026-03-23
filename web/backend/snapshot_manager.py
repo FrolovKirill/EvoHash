@@ -207,8 +207,12 @@ class SnapshotManager:
         except Exception:
             return
         try:
-            archive_key = f"{phf}:archive"
-            archive_reverse_key = f"{phf}:archive:reverse"
+            archive_keys = [k for k in r.keys("*:archive")
+                            if not k.endswith(":archive:reverse")]
+            if not archive_keys:
+                return
+            archive_key = archive_keys[0]
+            archive_reverse_key = archive_key + ":reverse"
             ts_key = f"{phf}:ts"
 
             archive: dict = r.hgetall(archive_key) or {}
@@ -258,7 +262,11 @@ class SnapshotManager:
             await asyncio.sleep(POLL_INTERVAL)
 
     def _tick(self, phf: str, run_dir: Path, redis_port: int, redis_db: int) -> None:
-        """Synchronous tick: diff archive, save new programs."""
+        """Synchronous tick: save every newly evaluated program from phash:program:*.
+
+        Mirrors what the Results tab shows — reads phash:program:* directly.
+        Bin is taken from archive:reverse if available, otherwise 'unplaced'.
+        """
         try:
             r = redis_lib.Redis(port=redis_port, db=redis_db,
                                 decode_responses=True, socket_connect_timeout=2)
@@ -266,30 +274,34 @@ class SnapshotManager:
             return
 
         try:
-            # {phf}:archive is a hash: cell_key -> program_id
-            archive_key = f"{phf}:archive"
-            current_archive: dict[str, str] = r.hgetall(archive_key) or {}
-
-            if not current_archive:
+            prog_keys = r.keys(f"{phf}:program:*")
+            if not prog_keys:
                 return
 
-            # Find changed/new cells
-            changed: list[tuple[str, str]] = []
-            for cell_key, pid in current_archive.items():
-                if self._last_archive.get(cell_key) != pid:
-                    changed.append((cell_key, pid))
+            # Build reverse index: program_id -> cell_key (best-effort)
+            reverse: dict[str, str] = {}
+            rev_keys = [k for k in r.keys("*:archive:reverse")]
+            for rk in rev_keys:
+                reverse.update(r.hgetall(rk) or {})
 
-            if not changed:
-                return
-
-            # Load history from disk once
             history = _load_history(run_dir)
             bins: dict = history.setdefault("bins", {})
             dirty = False
 
-            for cell_key, pid in changed:
-                data = _fetch_program(r, phf, pid)
-                if data is None:
+            for pk in prog_keys:
+                pid = pk.split(":")[-1]  # UUID part
+                if pid in self._last_archive:
+                    continue  # already saved
+
+                raw = r.get(pk)
+                if not raw:
+                    continue
+                try:
+                    data = json.loads(raw)
+                except Exception:
+                    continue
+
+                if data.get("state") != "done":
                     continue
 
                 metrics = data.get("metrics", {})
@@ -299,27 +311,30 @@ class SnapshotManager:
                     except Exception:
                         metrics = {}
 
+                efficiency = metrics.get("efficiency")
+                if efficiency is None:
+                    continue  # not yet evaluated
+
+                cell_key = reverse.get(pid, "unplaced")
                 name = _program_name(data, pid)
+
                 entry = {
                     "name": name,
-                    "efficiency": metrics.get("efficiency"),
+                    "efficiency": efficiency,
                     "ASR": metrics.get("asr"),
                     "L2": metrics.get("l2"),
                 }
 
                 bin_history: list = bins.setdefault(cell_key, [])
-
-                # Avoid duplicate entries (same program_id seen again after resume)
                 existing_names = {e["name"] for e in bin_history}
                 if name not in existing_names:
                     bin_history.append(entry)
                     dirty = True
-
                     code = data.get("code", "")
                     if code:
                         _save_program_code(run_dir, cell_key, name, code)
 
-                self._last_archive[cell_key] = pid
+                self._last_archive[pid] = cell_key  # mark as seen
 
             if dirty:
                 _save_history(run_dir, history)

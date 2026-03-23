@@ -105,6 +105,13 @@ async def start_run(config: RunConfig):
             redis_port=config.redis_port,
             redis_db=config.redis_db,
         )
+        # runner.start() returns immediately after launching the subprocess.
+        # Wait for the actual completion task before stopping the snapshot manager.
+        if runner._log_task:
+            try:
+                await runner._log_task
+            except Exception:
+                pass
         snapshot_manager.stop()
 
     snapshot_manager.start(config.phf, run_id, config.redis_port, config.redis_db)
