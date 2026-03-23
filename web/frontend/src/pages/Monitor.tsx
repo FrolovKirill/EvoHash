@@ -1,87 +1,12 @@
 import { useState, useEffect } from 'react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { useLogSocket } from '../hooks/useWebSocket'
-import { useStatus, useMetrics, useLatestMetrics, useMetricsHistory, useAnalysis } from '../hooks/useApi'
+import { useStatus, useMetrics, useLatestMetrics, useMetricsHistory } from '../hooks/useApi'
 import LogViewer from '../components/LogViewer'
 import MetricCard from '../components/MetricCard'
 import StatusBadge from '../components/StatusBadge'
 
 const BASE = import.meta.env.DEV ? 'http://localhost:8765' : ''
-
-function AnalysisPanel({ analysis }: { analysis: any }) {
-  if (!analysis || !analysis.programs?.length) {
-    return (
-      <div className="bg-dark-1 rounded border border-gray-800 p-4">
-        <div className="h-32 flex items-center justify-center text-gray-600 text-sm">
-          Анализ появится после запуска эволюции...
-        </div>
-      </div>
-    )
-  }
-
-  return (
-    <div className="bg-dark-1 rounded border border-gray-800 p-4">
-      <div className="flex justify-between items-center mb-3">
-        <div className="text-xs text-gray-500">
-          Ячеек: <span className="text-gray-300">{analysis.active_count}</span> активных
-          {' | '}
-          <span className="text-gray-300">{analysis.total_ever}</span> всего
-          {' | '}
-          <span className="text-gray-300">{analysis.total_ever - analysis.active_count}</span> заменено
-        </div>
-        <div className="text-xs text-gray-500 text-right">
-          {analysis.tick_started && !analysis.tick_finished && (
-            <span className="text-yellow-400 mr-3">⏳ анализ идёт (начат {analysis.tick_started})</span>
-          )}
-          {analysis.tick_started && analysis.tick_finished && (
-            <span className="mr-3">Тик: {analysis.tick_started} → {analysis.tick_finished}</span>
-          )}
-          Обновлено: <span className="text-gray-300">{analysis.last_updated || '—'}</span>
-        </div>
-      </div>
-      <table className="w-full text-sm font-mono">
-        <thead>
-          <tr className="text-gray-500 text-xs border-b border-gray-800">
-            <th className="text-left py-1 pr-2">#</th>
-            <th className="text-left py-1 pr-2">ID</th>
-            <th className="text-right py-1 pr-4">Efficiency</th>
-            <th className="text-right py-1 pr-4">ASR</th>
-            <th className="text-right py-1 pr-4">L2</th>
-            <th className="text-left py-1">Паттерны</th>
-          </tr>
-        </thead>
-        <tbody>
-          {analysis.programs.map((prog: any, i: number) => {
-            const top3 = prog.top3
-            let patternsEl
-            if (!top3) {
-              patternsEl = <span className="text-gray-600">[pending]</span>
-            } else if (top3.length === 1 && top3[0][0] === 'error') {
-              patternsEl = <span className="text-red-500">[error]</span>
-            } else {
-              patternsEl = top3.slice(0, 3).map(([name, score]: [string, number], j: number) => (
-                <span key={j} className="mr-2">
-                  <span className="text-gray-300">{name}</span>
-                  <span className="text-gray-500">({Math.round(score * 100)}%)</span>
-                </span>
-              ))
-            }
-            return (
-              <tr key={prog.id} className="border-b border-gray-800/50 hover:bg-dark-2 transition-colors">
-                <td className="py-1.5 pr-2 text-gray-500">{i + 1}</td>
-                <td className="py-1.5 pr-2 text-brand">{prog.id_short}</td>
-                <td className="py-1.5 pr-4 text-right text-white">{prog.metrics?.efficiency?.toFixed(6) ?? '—'}</td>
-                <td className="py-1.5 pr-4 text-right text-green-400">{prog.metrics?.asr?.toFixed(2) ?? '—'}</td>
-                <td className="py-1.5 pr-4 text-right text-yellow-400">{prog.metrics?.l2?.toFixed(4) ?? '—'}</td>
-                <td className="py-1.5">{patternsEl}</td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
-    </div>
-  )
-}
 
 export default function Monitor() {
   const { status } = useStatus()
@@ -90,9 +15,8 @@ export default function Monitor() {
   const latestMetrics = useLatestMetrics(phf)
   const { lines } = useLogSocket()
   const chartData = useMetricsHistory(phf)
-  const analysis = useAnalysis()
 
-  const [tab, setTab] = useState<'logs' | 'chart' | 'latest' | 'best' | 'analysis'>('logs')
+  const [tab, setTab] = useState<'logs' | 'chart' | 'latest' | 'best'>('logs')
   const [latestTs, setLatestTs] = useState(Date.now())
   const [bestTs, setBestTs] = useState(Date.now())
   const [latestError, setLatestError] = useState(false)
@@ -153,7 +77,7 @@ export default function Monitor() {
 
       {/* Tabs */}
       <div className="flex gap-1 mb-4">
-        {([['logs', 'Логи'], ['chart', 'График'], ['analysis', 'Анализ'], ['latest', 'Последняя'], ['best', 'Лучшая']] as const).map(([t, label]) => (
+        {([['logs', 'Логи'], ['chart', 'График'], ['latest', 'Последняя'], ['best', 'Лучшая']] as const).map(([t, label]) => (
           <button
             key={t}
             onClick={() => setTab(t as typeof tab)}
@@ -190,8 +114,6 @@ export default function Monitor() {
             </ResponsiveContainer>
           )}
         </div>
-      ) : tab === 'analysis' ? (
-        <AnalysisPanel analysis={analysis} />
       ) : tab === 'latest' ? (
         <div className="bg-dark-1 rounded border border-gray-800 p-4">
           {latestError ? (

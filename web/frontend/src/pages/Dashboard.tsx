@@ -336,9 +336,7 @@ export default function Dashboard() {
                     </div>
                     <div className="text-xs text-gray-400">
                       {run.programs ?? 0} программ
-                      {run.total_seen ? ` | ${run.total_seen} всего видели` : ''}
-                      {run.analyzed ? ` | ${run.analyzed} проанализировано` : ''}
-                      {run.snapshot_count ? ` | ${run.snapshot_count} снапшотов` : ''}
+                      {run.bins ? ` | ${run.bins} бинов` : ''}
                     </div>
                   </button>
                 ))}
