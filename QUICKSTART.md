@@ -30,11 +30,53 @@ python web/run_web.py
 > `run_web.py` auto-installs backend pip deps and runs `npm install && npm run build` on first launch.
 > Use `--port PORT` to change the default port, `--no-browser` to suppress auto-open, `--dev` for hot-reload.
 
-The web UI has four pages:
-- **Запуск** — choose PHF and LLM model (loaded from `config/models.yaml`), configure generations/pairs, start/stop the run. Includes "reset to defaults" and "clear data" buttons, and shows last run parameters.
-- **Монитор** — live colorized logs, efficiency/ASR chart per generation, separate metric cards and image grid tabs for best and latest programs (source/target/attacked/diff images updated every 2s).
-- **Результаты** — table of evolved programs with code viewer and .py download
-- **Бейзлайны** — run `evaluate.py` on all baseline attacks with one click
+### Web UI pages
+
+**Запуск** — configuration and launch page.
+- Select target PHF (pHash, PDQ, NeuralHash, PhotoDNA) and LLM model from dropdown (models loaded from `config/models.yaml`)
+- Set number of generations and image pairs per evaluation
+- Start / stop evolution with a single button
+- "Clear data" button flushes the Redis DB and resets logs
+- Shows last run parameters for reference
+- Runs `/api/check-env` on load to verify that gigaevo-core, dataset, Redis, and API key are all set up correctly
+
+**Монитор** — live dashboard during evolution.
+- Real-time colorized log stream via WebSocket (`/ws/logs`)
+- Efficiency and ASR chart updated each generation
+- Metric cards for best and latest programs (efficiency, ASR, L2, queries)
+- Image grid tabs: source / target / attacked / diff images, auto-refreshed every 2 seconds
+- Status bar showing current generation progress
+
+**Результаты** — evolved programs browser.
+- Table of all programs stored in Redis, sorted by efficiency
+- Click any row to view the full attack code
+- Download individual programs as `.py` files
+
+**Бейзлайны** — baseline evaluation.
+- Run `scripts/evaluate.py --all-seeds` on all baseline attacks with one click
+- Results displayed in a table (ASR, L2, Efficiency, Queries, Time)
+- Results saved to `results_baselines.csv` for further analysis
+
+### Web UI API
+
+The backend exposes a REST API at `http://localhost:8765/api/`. Interactive docs available at `/docs` (Swagger UI).
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/api/status` | GET | Current run status, generation progress |
+| `/api/run` | POST | Start evolution (accepts PHF, generations, model, etc.) |
+| `/api/stop` | POST | Stop running evolution |
+| `/api/clear-data` | POST | Flush Redis DB and reset state |
+| `/api/programs` | GET | List evolved programs from Redis |
+| `/api/metrics` | GET | Best program metrics |
+| `/api/metrics-latest` | GET | Latest evaluated program metrics |
+| `/api/metrics-history` | GET | Metrics over time (for charts) |
+| `/api/grid-image` | GET | Best/latest image grid (PNG) |
+| `/api/models` | GET | Available LLM models from `config/models.yaml` |
+| `/api/check-env` | GET | Verify prerequisites (Redis, data, API key, gigaevo) |
+| `/api/baselines` | GET | Baseline evaluation results |
+| `/api/run-baselines` | POST | Run baseline evaluation |
+| `/ws/logs` | WebSocket | Live log stream + generation status updates |
 
 ---
 
@@ -233,6 +275,70 @@ So the typical two-terminal setup during a run is:
 ```
 Terminal 1:  python run_evohash.py phash --max-generations 100
 Terminal 2:  python scripts/show_best.py phash --watch 30
+```
+
+#### Archive snapshots and LLM analysis
+
+`scripts/archive_manager.py` saves periodic snapshots of the MAP-Elites archive from Redis
+to JSON files and optionally classifies each evolved program against known baseline attack
+patterns using an LLM (via OpenRouter API).
+
+```bash
+# Save a one-off snapshot
+python scripts/archive_manager.py save phash
+
+# Auto-save every 5 minutes while evolution runs (Ctrl+C to stop)
+python scripts/archive_manager.py watch phash --interval 300
+
+# Auto-save + LLM pattern analysis (classifies code against NES, SimBa, HSJA, etc.)
+python scripts/archive_manager.py watch phash --analyze --interval 300
+
+# Use a different model for analysis (default: openai/gpt-oss-120b)
+python scripts/archive_manager.py watch phash --analyze --model qwen/qwen3.5-122b-a10b
+
+# Load a snapshot back into Redis
+python scripts/archive_manager.py load phash --file snapshots/phash/my_run.json
+
+# Load and overwrite (clears existing keys for this PHF first)
+python scripts/archive_manager.py load phash --file snapshots/phash/my_run.json --overwrite
+
+# Show stats about a snapshot (no Redis needed)
+python scripts/archive_manager.py info --file snapshots/phash/my_run.json
+
+# Compare two snapshots (added / removed / changed programs)
+python scripts/archive_manager.py diff --old snap1.json --new snap2.json
+```
+
+The `watch` mode prints a live summary table:
+```
+================================================================================
+  [21:03:06]  Cells: 8 active | 10 total ever | 2 replaced
+================================================================================
+  # 1  985c01b1  eff= 0.023423  asr=1.00  l2=42.6925  | HSJA(95%)  NES(45%)  SimBa(20%)
+  # 2  0e47c465  eff= 0.023074  asr=1.00  l2=43.3394  | SimBa(62%)  HSJA(48%)  NES(15%)
+  ...
+```
+
+- **Cells active** — programs currently in the MAP-Elites archive
+- **Total ever** — every program ID ever observed (tracks replacements)
+- **Top-3 baselines** — LLM-assigned similarity to known attack patterns (0-100%)
+
+Snapshots are saved to `snapshots/{phf}/` (gitignored). Analysis results and history
+are cached in `snapshots/{phf}/_history.json` to avoid redundant API calls.
+
+For standalone analysis without snapshots, use `scripts/analyze_patterns.py`:
+
+```bash
+python scripts/analyze_patterns.py phash
+python scripts/analyze_patterns.py pdq --model qwen/qwen3.5-122b-a10b
+```
+
+Typical three-terminal setup with analysis:
+
+```
+Terminal 1:  python run_evohash.py phash --max-generations 100
+Terminal 2:  python scripts/archive_manager.py watch phash --analyze --interval 300
+Terminal 3:  python scripts/show_best.py phash --watch 30
 ```
 
 In W&B you will see a separate **monitor** run (grouped under the same PHF)
