@@ -1,7 +1,181 @@
-**TASK**: Evolve a Python attack strategy against PhotoDNA (Microsoft).
+**TASK**: Evolve a Python attack strategy that generates hash collisions against Microsoft PhotoDNA.
 
-TODO: This problem is not yet runnable — PhotoDNA API access is required.
-      See evohash/phf/photodna.py for details.
+══════════════════════════════════════════════════════════════════════════════
+BACKGROUND
+══════════════════════════════════════════════════════════════════════════════
 
-PhotoDNA collision threshold: L1 distance ≤ 3855 (over 144-element float vector).
-Performance metric: efficiency = ASR / (mean_L2 + ε)
+PhotoDNA is a perceptual hash developed by Microsoft, widely deployed for content
+matching by major platforms (Facebook, Google, Twitter, etc.). Unlike binary hashes
+(pHash, PDQ, NeuralHash), PhotoDNA produces a 144-byte continuous-valued digest.
+
+PhotoDNA computation pipeline (reverse-engineered):
+  1. Convert image to RGB
+  2. Crop to the largest centred square region (aspect-ratio normalisation)
+  3. Resize to 26x26 pixels
+  4. Convert to CIE-Lab colour space (luminance + colour opponent channels)
+  5. Divide the 26x26 image into a grid of overlapping radial sectors
+  6. Compute gradient histograms (similar to HOG) in each sector
+  7. Concatenate and normalise -> 144-byte uint8 digest
+
+Key properties:
+  - The digest is 144 BYTES (not bits) -- each element is a uint8 [0, 255]
+  - Distance metric is L1 (Manhattan), NOT Hamming
+  - Collision threshold: L1 distance <= 3855 (out of max possible 144 * 255 = 36720)
+  - This means ~10.5% of the maximum possible distance -- a moderate threshold
+  - The hash uses COLOUR information (CIE-Lab) -- unlike pHash/PDQ
+  - Gradient histograms capture edge orientations, similar to HOG/SIFT features
+  - The 26x26 intermediate resolution is very small -- fine details are lost
+
+Two images are a **collision** when their L1 distance <= 3855.
+
+GOAL: minimally perturb a source image so its PhotoDNA digest matches a target digest.
+
+READING THE TARGET HASH:
+  target_hash          -> numpy array, shape (144,), dtype uint8
+  source_hash = hash_fn.compute(source_image)
+  source_hash          -> numpy array, shape (144,), dtype uint8
+  diff = np.abs(source_hash.astype(int) - target_hash.astype(int))
+  current_distance = diff.sum()  # L1 distance
+  # You need to reduce this below 3855
+
+══════════════════════════════════════════════════════════════════════════════
+CRITICAL PITFALLS -- READ BEFORE WRITING ANY ATTACK
+══════════════════════════════════════════════════════════════════════════════
+
+  X DO NOT treat this like a binary hash.
+    PhotoDNA uses L1 distance over continuous uint8 values, NOT Hamming distance.
+    There are no "bits to flip." Instead, you must push 144 continuous values
+    toward the target. This is fundamentally a REGRESSION problem, not
+    combinatorial bit-flipping.
+
+  X DO NOT ignore colour channels.
+    PhotoDNA converts to CIE-Lab colour space. Perturbations to all RGB channels
+    affect the hash. Grayscale-only perturbations miss the a/b colour channels
+    which carry significant hash information.
+
+  X DO NOT work at high resolution.
+    PhotoDNA crops and resizes to 26x26 -- even smaller than pHash's 32x32.
+    Perturbations at 224x224 get massively downsampled. Work in ~26x26 or
+    slightly larger space, then upsample.
+
+  X DO NOT assume the gradient is always zero.
+    Unlike Hamming-based hashes, PhotoDNA's L1 distance over continuous values
+    DOES change with small perturbations. Gradient estimation methods are
+    MUCH more viable here than for pHash/PDQ/NeuralHash.
+
+  X DO NOT forget the centre-crop step.
+    PhotoDNA crops to the largest centred square before resizing. If your source
+    image is not square, the hash only sees the central square region.
+    Perturbations outside this region have zero effect.
+
+══════════════════════════════════════════════════════════════════════════════
+PERFORMANCE METRIC
+══════════════════════════════════════════════════════════════════════════════
+
+  efficiency = ASR / (mean_L2 + e)   <- MAXIMISE THIS
+
+  - ASR (Attack Success Rate): fraction of image pairs where L1_distance <= 3855
+  - mean_L2: mean normalised L2 distortion = ||d||_2 / sqrt(H*W*C)
+  - Higher efficiency = more successful attacks with less visible distortion
+
+══════════════════════════════════════════════════════════════════════════════
+FUNCTION CONTRACT
+══════════════════════════════════════════════════════════════════════════════
+
+Your function MUST be named ``entrypoint`` and accept a single ``context`` dict:
+
+  def entrypoint(context: dict) -> dict:
+      ...
+
+Context keys:
+  - context["source_images"]  : list of PIL.Image.Image (RGB, 224x224)
+  - context["target_hashes"]  : list of numpy arrays, shape (144,), dtype uint8
+  - context["target_images"]  : list of PIL.Image.Image -- the actual target images
+                                 (their hash == target_hash by definition, so they are
+                                  guaranteed starting collisions for boundary-walk attacks)
+  - context["hash_fn"]        : PhotoDNAWrapper with .compute(img) -> np.ndarray and
+                                .distance(h1, h2) -> float (L1 distance)
+  - context["threshold"]      : int = 3855 (collision threshold, L1 distance)
+
+Return value must be a dict with:
+  - "attacked_images" : list[PIL.Image.Image]  -- one perturbed image per source
+  - "metrics"         : list[dict]             -- one metric dict per image:
+      {
+          "success"    : bool,  # True if L1 distance <= threshold
+          "l2"         : float, # normalised L2 distance
+          "n_queries"  : int,   # number of hash evaluations used
+          "final_dist" : float, # final L1 distance achieved (optional)
+      }
+
+══════════════════════════════════════════════════════════════════════════════
+ATTACK STRATEGIES -- RANKED BY EFFECTIVENESS
+══════════════════════════════════════════════════════════════════════════════
+
+PhotoDNA is the MOST gradient-friendly hash in this benchmark because its distance
+metric (L1 over continuous values) responds smoothly to small perturbations.
+Dimensionality: 26x26x3 = 2028 values (the effective internal resolution).
+
+  *** NES / GRADIENT ESTIMATION (most effective -- uniquely suited to PhotoDNA)
+    PhotoDNA's continuous L1 distance provides real gradient signal:
+    - Use L1 distance as loss (NOT binary collision indicator)
+    - sigma ~ 0.01-0.05, population size >= 30
+    - Adam/momentum optimiser to accumulate gradient estimates
+    - Operate in ~26x26x3 space (match PhotoDNA's internal resolution)
+    Unlike Hamming-based hashes, EVERY small perturbation changes the L1 distance,
+    so gradient estimation actually works here.
+
+  *** DIRECT REGRESSION IN LOW-RESOLUTION SPACE
+    1. Compute source hash and target hash (both 144-element uint8 vectors)
+    2. Compute the error: target - source for each element
+    3. Design a perturbation in 26x26 Lab colour space that shifts the gradient
+       histogram features toward the target
+    4. Upsample to 224x224 and add to source
+    This is viable because the feature extraction (gradient histograms in sectors)
+    is relatively interpretable compared to neural network features.
+
+  *** DECISION-BOUNDARY WALK (reliable fallback)
+    HopSkipJump-style: start from the target image (guaranteed collision),
+    binary-search to the boundary (L1 = 3855), then walk the boundary toward
+    the source to reduce L2.
+    The continuous L1 metric makes boundary estimation smoother than for
+    Hamming-based hashes. Use >= 100 gradient samples per step.
+
+  ** COORDINATE DESCENT IN PIXEL SPACE
+    Greedily perturb individual pixels or small patches in 26x26 space:
+    - For each candidate perturbation, measure L1 distance change
+    - Accept perturbations that reduce L1 distance to target
+    - The continuous metric means most perturbations produce measurable changes
+    Simple but effective due to the smooth loss landscape.
+
+  ** SIMBA-STYLE DCT BASIS SEARCH
+    Use DCT basis vectors as a structured perturbation set in 26x26 space:
+    - Try adding/subtracting each basis vector (scaled)
+    - Accept if L1 distance decreases
+    - Low-frequency basis vectors affect more hash elements simultaneously
+    The DCT basis is not special to PhotoDNA's algorithm, but provides an
+    efficient orthogonal basis for searching the perturbation space.
+
+  * RANDOM SEARCH WITH ACCEPTANCE
+    Sample random perturbations in 26x26x3 space, accept those that reduce
+    L1 distance. Simple baseline -- surprisingly effective because nearly
+    all perturbations produce a non-zero L1 change (unlike Hamming hashes).
+
+══════════════════════════════════════════════════════════════════════════════
+AVAILABLE IMPORTS
+══════════════════════════════════════════════════════════════════════════════
+
+Standard library and the following packages are available:
+  numpy, scipy, PIL (Pillow)
+
+Do NOT import torch, tensorflow, or other deep-learning frameworks -- the
+evaluator runs in a CPU-only environment.
+
+Note: PhotoDNA hash computation uses a native DLL (PhotoDNAx64.dll) via ctypes.
+On Windows it is called directly; on Linux/macOS it runs through Wine or Docker.
+Each query takes ~1-5ms (Windows) or ~0.3-1s (Wine). Budget queries accordingly.
+
+══════════════════════════════════════════════════════════════════════════════
+CURRENT BEST PERFORMER
+══════════════════════════════════════════════════════════════════════════════
+
+[filled automatically by the evolution framework]

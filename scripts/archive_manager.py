@@ -459,7 +459,7 @@ def main() -> None:
     r = redis.Redis(host=args.host, port=args.port, db=args.db, decode_responses=True)
 
     if args.command == "save":
-        out = args.file or Path("snapshots") / f"{args.phf}_{time.strftime('%Y%m%d_%H%M%S')}.json"
+        out = args.file or Path("snapshots") / args.phf / f"{args.phf}_{time.strftime('%Y%m%d_%H%M%S')}.json"
         save_archive(r, args.phf, out)
 
     elif args.command == "load":

@@ -1,84 +1,155 @@
-**TASK**: Evolve a Python attack strategy that generates hash collisions against PDQ (Photo DNA Quality hash).
+**TASK**: Evolve a Python attack strategy that generates hash collisions against PDQ (Perceptual hash by Facebook/Meta).
 
 ══════════════════════════════════════════════════════════════════════════════
 BACKGROUND
 ══════════════════════════════════════════════════════════════════════════════
 
-PDQ is a perceptual hash developed by Facebook/Meta, designed for photo
-matching at scale.  It produces a 256-bit binary hash.
+PDQ is a perceptual hash developed by Facebook/Meta for photo matching at scale.
+It produces a 256-bit binary hash using the following steps:
+  1. Convert RGB image to GRAYSCALE  <- CRITICAL: hash ignores colour entirely
+  2. Resize grayscale image to 64x64 (4096 pixels total)
+  3. Apply a luminance-normalising pass (Jarosz filter) to reduce lighting bias
+  4. Apply 2D DCT (Discrete Cosine Transform) to the 64x64 grayscale image
+  5. Keep top-left 16x16 block (256 low-frequency coefficients)
+  6. Threshold each coefficient against the MEDIAN of those 256 coefficients -> 256-bit hash
+     bit[i] = 1  if  dct[i] > median(dct),  else  0
 
-PDQ computation pipeline:
-  1. Convert image to grayscale, resize to 64×64
-  2. Apply a 2D DCT (butteraugmented dithered variant)
-  3. Take the top-left 16×16 DCT coefficients (256 values)
-  4. Binarise against the median → 256-bit hash
+Key differences from pHash:
+  - Larger spatial domain: 64x64 (vs 32x32 for pHash)
+  - More hash bits: 256 (vs 64 for pHash)
+  - Threshold is MEDIAN (vs MEAN for pHash) -- median is more robust to outliers
+  - Luminance normalisation before DCT reduces sensitivity to brightness changes
 
-Two images are a **collision** when their Hamming distance ≤ 92 bits (out of 256).
+Two images are a **collision** when their Hamming distance <= 92 bits (out of 256).
+This means ~36% of bits can differ and still collide -- a much larger margin than pHash.
 
 GOAL: minimally perturb a source image so its PDQ hash matches a target hash.
+
+READING THE TARGET HASH:
+  target_hash          -> numpy array, shape (256,), dtype bool/uint8
+  source_hash = hash_fn.compute(source_image)
+  source_hash          -> numpy array, shape (256,), dtype bool/uint8
+  bits_to_flip = source_hash ^ target_hash  -> which bits must change
+  You need to flip AT LEAST (current_distance - 92) bits to achieve a collision.
+
+══════════════════════════════════════════════════════════════════════════════
+CRITICAL PITFALLS -- READ BEFORE WRITING ANY ATTACK
+══════════════════════════════════════════════════════════════════════════════
+
+  X DO NOT work in the original 224x224x3 RGB pixel space.
+    PDQ downsamples to 64x64 grayscale -- perturbations at the original
+    resolution get averaged and attenuated. Work in 64x64 grayscale space,
+    then upsample the perturbation back to the original resolution.
+
+  X DO NOT rely on gradient estimation (NES, ZO-SGD, finite differences)
+    as the primary driver.
+    Hash distance is an INTEGER (Hamming distance). It is piecewise-constant:
+    most small perturbations produce d_pos - d_neg = 0, giving a zero gradient
+    estimate. With 256 bits this is less severe than pHash's 64-bit case, but
+    still wastes most of the query budget.
+
+  X DO NOT apply perturbations only to RGB channels independently.
+    Grayscale conversion weights: Y = 0.299*R + 0.587*G + 0.114*B.
+    A perturbation invisible after grayscale conversion has zero effect on the hash.
+
+  X DO NOT ignore the luminance normalisation step.
+    PDQ applies a Jarosz box filter to normalise local luminance before DCT.
+    Uniform brightness shifts are largely cancelled out. Perturbations must
+    create local contrast differences, not global brightness changes.
 
 ══════════════════════════════════════════════════════════════════════════════
 PERFORMANCE METRIC
 ══════════════════════════════════════════════════════════════════════════════
 
-  efficiency = ASR / (mean_L2 + ε)   ← MAXIMISE THIS
+  efficiency = ASR / (mean_L2 + e)   <- MAXIMISE THIS
 
-  - ASR (Attack Success Rate): fraction of image pairs where hash_distance ≤ 92
-  - mean_L2: mean normalised L2 distortion = ‖δ‖₂ / √(H·W·C)
+  - ASR (Attack Success Rate): fraction of image pairs where hash_distance <= 92
+  - mean_L2: mean normalised L2 distortion = ||d||_2 / sqrt(H*W*C)
+  - Higher efficiency = more successful attacks with less visible distortion
 
 ══════════════════════════════════════════════════════════════════════════════
 FUNCTION CONTRACT
 ══════════════════════════════════════════════════════════════════════════════
 
+Your function MUST be named ``entrypoint`` and accept a single ``context`` dict:
+
   def entrypoint(context: dict) -> dict:
+      ...
 
 Context keys:
-  - context["source_images"]  : list of PIL.Image.Image (RGB, 224×224)
+  - context["source_images"]  : list of PIL.Image.Image (RGB, 224x224)
   - context["target_hashes"]  : list of numpy arrays, shape (256,), dtype bool/uint8
-  - context["hash_fn"]        : PDQWrapper with .compute(img) → np.ndarray and
-                                .distance(h1, h2) → float (Hamming distance)
-  - context["threshold"]      : int = 92
+  - context["target_images"]  : list of PIL.Image.Image -- the actual target images
+                                 (their hash == target_hash by definition, so they are
+                                  guaranteed starting collisions for boundary-walk attacks)
+  - context["hash_fn"]        : PDQWrapper with .compute(img) -> np.ndarray and
+                                .distance(h1, h2) -> float (Hamming distance)
+  - context["threshold"]      : int = 92 (collision threshold)
 
-Return value:
-  - "attacked_images" : list[PIL.Image.Image]
-  - "metrics"         : list[dict] each with:
-      {"success": bool, "l2": float, "n_queries": int, "final_dist": float}
+Return value must be a dict with:
+  - "attacked_images" : list[PIL.Image.Image]  -- one perturbed image per source
+  - "metrics"         : list[dict]             -- one metric dict per image:
+      {
+          "success"    : bool,  # True if hash distance <= threshold
+          "l2"         : float, # normalised L2 distance
+          "n_queries"  : int,   # number of hash evaluations used
+          "final_dist" : float, # final hash distance achieved (optional)
+      }
 
 ══════════════════════════════════════════════════════════════════════════════
-ATTACK STRATEGIES TO EXPLORE
+ATTACK STRATEGIES -- RANKED BY EFFECTIVENESS
 ══════════════════════════════════════════════════════════════════════════════
 
-PDQ hashes 256 bits from a 16×16 DCT block.  The larger bit budget (256 vs 64
-for pHash) and higher threshold (92 vs 12) means attacks need to flip ~36% of
-bits — more than pHash but with a larger overall target surface.
+The most effective attacks work analytically in the 64x64 grayscale DCT domain.
+Dimensionality: 64x64 = 4096 values (vs 224x224x3 = 150k -- avoid pixel space).
+The generous threshold (92/256 = 36%) means even imprecise attacks often succeed.
 
-  ► Bit-flip targeting
-    Compute target bits that differ from the current hash; design perturbations
-    that flip those specific DCT coefficients.
+  *** ANALYTICAL DCT MANIPULATION (most effective)
+    1. Convert source to grayscale 64x64 -> apply luminance normalisation ->
+       apply DCT -> extract 16x16 block (256 coefficients)
+    2. Compute which bits need flipping: source_hash ^ target_hash
+    3. For each bit that needs flipping: push the corresponding DCT coefficient
+       across the median boundary. The median shifts as you change coefficients,
+       so adjust iteratively.
+    4. Apply inverse DCT -> upsample perturbation back to 224x224 -> add to source.
+    Key insight: 256 coefficients from a 16x16 block -- you know EXACTLY which
+    coefficients determine the hash and in which direction each needs to move.
+    The median threshold is more stable than mean (less coupling between bits).
 
-  ► Coordinate descent in pixel space
-    Greedily perturb individual pixels or small patches in directions that
-    reduce the Hamming distance.
+  *** DECISION-BOUNDARY WALK (effective, more queries)
+    HopSkipJump-style: start from the target image (guaranteed collision),
+    binary-search to the decision boundary, then walk the boundary toward
+    the source to reduce distortion.
+    Works because it only needs a binary oracle (collides / does not collide).
+    The 92-bit threshold means the collision region is large -- boundary walks
+    converge faster than for pHash. Work in 64x64 grayscale space.
 
-  ► NES/SimBa adapted for 256-bit space
-    Use antithetic sampling or DCT-basis steps with a larger step budget
-    proportional to the 256-bit hash size.
+  ** BIT-TARGETED COORDINATE DESCENT
+    For each bit that needs flipping, compute the DCT basis vector for that
+    (u,v) position in 64x64 space and add a scaled version to the image.
+    Each step targets one bit with minimal global distortion.
+    With 256 bits and threshold 92, you only need to fix bits beyond the margin.
 
-  ► Frequency-band injection
-    PDQ processes a 64×64 grayscale version — low-spatial-frequency patterns
-    (period ≥ 8 pixels) affect 16×16 DCT coefficients most directly.
+  ** FREQUENCY INJECTION IN 64x64 SPACE
+    Add low-frequency sinusoidal patterns in grayscale 64x64 space.
+    Low-frequency patterns (period >= 8 pixels in 64x64) directly affect the
+    16x16 DCT block. Upsample the pattern to 224x224 before adding to source.
 
-  ► Momentum-based gradient descent
-    Accumulate velocity across iterations to escape flat regions of the
-    Hamming distance landscape.
+  * GRADIENT-FREE SEARCH (limited effectiveness due to integer loss)
+    If using NES/SimBa/ZO: operate on the 64x64 grayscale image.
+    The 256-bit hash gives slightly better gradient signal than pHash's 64-bit,
+    but integer distance still causes stalling. Use large sigma (>= 8.0).
+    Best as a refinement step after analytical initialisation.
 
 ══════════════════════════════════════════════════════════════════════════════
 AVAILABLE IMPORTS
 ══════════════════════════════════════════════════════════════════════════════
 
-Standard library and: numpy, scipy, PIL (Pillow), pdqhash
+Standard library and the following packages are available:
+  numpy, scipy, PIL (Pillow), pdqhash
 
-Do NOT import torch, tensorflow, or other deep-learning frameworks.
+Do NOT import torch, tensorflow, or other deep-learning frameworks -- the
+evaluator runs in a CPU-only environment.
 
 ══════════════════════════════════════════════════════════════════════════════
 CURRENT BEST PERFORMER
