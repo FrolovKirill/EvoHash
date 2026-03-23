@@ -350,11 +350,6 @@ async def ws_logs(ws: WebSocket):
     await ws.accept()
     active_ws.append(ws)
 
-    # Send existing logs
-    if runner.log_lines:
-        await ws.send_text(json.dumps({"type": "history", "lines": runner.log_lines}))
-
-    # Register callback for new lines
     queue: asyncio.Queue = asyncio.Queue()
 
     def on_line(line: str):
@@ -363,6 +358,10 @@ async def ws_logs(ws: WebSocket):
     runner.log_callbacks.append(on_line)
     last_gen = -1
     try:
+        # Send existing logs
+        if runner.log_lines:
+            await ws.send_text(json.dumps({"type": "history", "lines": runner.log_lines}))
+
         while True:
             try:
                 line = await asyncio.wait_for(queue.get(), timeout=1.0)

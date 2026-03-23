@@ -153,7 +153,7 @@ class Runner:
             self._emit(f"[web] Нужно {needed} изображений, есть {have} — докачиваю до {want}...")
             dl_proc = subprocess.Popen(
                 [sys.executable, str(PROJECT_ROOT / "scripts" / "download_dataset.py"),
-                 "--synthetic", "--n-images", str(want)],
+                 "--n-images", str(want)],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 cwd=str(PROJECT_ROOT),
