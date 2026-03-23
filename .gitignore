@@ -31,6 +31,9 @@ data/*.zip
 # Experiment outputs
 outputs/
 
+# Archive snapshots (runtime data)
+snapshots/
+
 # Environment
 .env
 *.env
