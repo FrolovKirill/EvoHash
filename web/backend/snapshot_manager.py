@@ -59,6 +59,7 @@ def list_runs(phf: str) -> list[dict]:
                 entry["bins"] = len(bins)
             except Exception:
                 pass
+        entry["resumable"] = (run_dir / REDIS_SNAPSHOT_FILE).exists()
         runs.append(entry)
     return runs
 
@@ -111,18 +112,73 @@ def _program_name(data: dict, pid: str) -> str:
     return safe or pid[:16]
 
 
+REDIS_SNAPSHOT_FILE = "redis_snapshot.json"
+
+
+def load_redis_snapshot(run_dir: Path) -> Optional[dict]:
+    """Load a saved Redis snapshot from a run folder. Returns None if not found."""
+    f = run_dir / REDIS_SNAPSHOT_FILE
+    if not f.exists():
+        return None
+    try:
+        return json.loads(f.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
+def restore_redis_from_snapshot(snap: dict, redis_port: int = 6379, redis_db: int = 0) -> int:
+    """Restore Redis from a saved snapshot. Returns number of programs restored."""
+    r = redis_lib.Redis(port=redis_port, db=redis_db,
+                        decode_responses=True, socket_connect_timeout=2)
+    try:
+        r.flushdb()
+        pipe = r.pipeline(transaction=False)
+
+        # Restore program keys
+        programs = snap.get("programs", {})
+        for key, raw in programs.items():
+            pipe.set(key, raw)
+
+        # Restore archive hash (cell -> pid)
+        archive = snap.get("archive", {})
+        if archive:
+            pipe.hset(snap["archive_key"], mapping=archive)
+
+        # Restore reverse index (pid -> cell)
+        reverse = snap.get("archive_reverse", {})
+        if reverse:
+            pipe.hset(snap["archive_reverse_key"], mapping=reverse)
+
+        # Restore atomic counter
+        if snap.get("ts_key") and snap.get("ts"):
+            pipe.set(snap["ts_key"], snap["ts"])
+
+        pipe.execute()
+        return len(programs)
+    finally:
+        r.close()
+
+
 class SnapshotManager:
     def __init__(self) -> None:
         self._task: Optional[asyncio.Task] = None
         self._stop_flag = False
-        # cell_key -> program_id of the last snapshot we recorded
         self._last_archive: dict[str, str] = {}
+        # stored so stop() can save the Redis snapshot
+        self._phf: str = ""
+        self._run_id: str = ""
+        self._redis_port: int = 6379
+        self._redis_db: int = 0
 
     def start(self, phf: str, run_id: str, redis_port: int = 6379, redis_db: int = 0) -> None:
         """Start background polling. Safe to call multiple times (stops previous run)."""
         self.stop()
         self._stop_flag = False
         self._last_archive = {}
+        self._phf = phf
+        self._run_id = run_id
+        self._redis_port = redis_port
+        self._redis_db = redis_db
         self._task = asyncio.create_task(
             self._poll_loop(phf, run_id, redis_port, redis_db)
         )
@@ -132,6 +188,61 @@ class SnapshotManager:
         if self._task and not self._task.done():
             self._task.cancel()
         self._task = None
+        if self._phf and self._run_id:
+            try:
+                self._save_redis_snapshot(
+                    self._phf,
+                    SNAPSHOTS_DIR / self._phf / self._run_id,
+                    self._redis_port,
+                    self._redis_db,
+                )
+            except Exception:
+                pass
+
+    def _save_redis_snapshot(self, phf: str, run_dir: Path, redis_port: int, redis_db: int) -> None:
+        """Capture current Redis state to redis_snapshot.json for future resume."""
+        try:
+            r = redis_lib.Redis(port=redis_port, db=redis_db,
+                                decode_responses=True, socket_connect_timeout=2)
+        except Exception:
+            return
+        try:
+            archive_key = f"{phf}:archive"
+            archive_reverse_key = f"{phf}:archive:reverse"
+            ts_key = f"{phf}:ts"
+
+            archive: dict = r.hgetall(archive_key) or {}
+            if not archive:
+                return  # nothing to save
+
+            # Save raw program strings for current elites only
+            programs: dict[str, str] = {}
+            for pid in archive.values():
+                prog_key = f"{phf}:program:{pid}"
+                raw = r.get(prog_key)
+                if raw:
+                    programs[prog_key] = raw
+
+            snap = {
+                "phf": phf,
+                "archive_key": archive_key,
+                "archive": archive,
+                "archive_reverse_key": archive_reverse_key,
+                "archive_reverse": r.hgetall(archive_reverse_key) or {},
+                "ts_key": ts_key,
+                "ts": r.get(ts_key),
+                "programs": programs,
+            }
+
+            run_dir.mkdir(parents=True, exist_ok=True)
+            (run_dir / REDIS_SNAPSHOT_FILE).write_text(
+                json.dumps(snap, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
+        finally:
+            try:
+                r.close()
+            except Exception:
+                pass
 
     async def _poll_loop(self, phf: str, run_id: str, redis_port: int, redis_db: int) -> None:
         run_dir = SNAPSHOTS_DIR / phf / run_id

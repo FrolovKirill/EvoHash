@@ -15,7 +15,9 @@ from pydantic import BaseModel
 
 from redis_bridge import get_best_metrics, get_latest_metrics, get_programs, reset_client, build_metrics_history
 from runner import Status, runner
-from snapshot_manager import snapshot_manager, generate_run_id, list_runs
+from snapshot_manager import (snapshot_manager, generate_run_id, list_runs,
+                              load_redis_snapshot, restore_redis_from_snapshot,
+                              SNAPSHOTS_DIR)
 
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 FRONTEND_DIST = Path(__file__).parent.parent / "frontend" / "dist"
@@ -117,14 +119,22 @@ async def get_runs(phf: str = "phash"):
 
 @app.post("/api/run-resume")
 async def resume_run(config: ResumeConfig):
-    """Resume evolution, continuing to record into the existing run folder."""
+    """Resume evolution from a saved Redis snapshot, continuing into the same run folder."""
     if runner.status == Status.RUNNING:
         return {"ok": False, "message": "Уже запущено"}
 
-    from snapshot_manager import SNAPSHOTS_DIR
     run_dir = SNAPSHOTS_DIR / config.phf / config.run_id
     if not run_dir.exists():
         return {"ok": False, "message": f"Run {config.run_id} не найден"}
+
+    snap = load_redis_snapshot(run_dir)
+    if snap is None:
+        return {"ok": False, "message": f"Redis-снапшот для {config.run_id} не найден. Запустите новую эволюцию."}
+
+    try:
+        n = restore_redis_from_snapshot(snap, config.redis_port, config.redis_db)
+    except Exception as e:
+        return {"ok": False, "message": f"Ошибка восстановления Redis: {e}"}
 
     async def _resume():
         await runner.start(
@@ -138,11 +148,10 @@ async def resume_run(config: ResumeConfig):
         )
         snapshot_manager.stop()
 
-    # Continue recording into the same run folder (load existing last_archive state)
     snapshot_manager.start(config.phf, config.run_id, config.redis_port, config.redis_db)
     asyncio.create_task(_resume())
     return {"ok": True, "run_id": config.run_id,
-            "message": f"Возобновляю {config.phf}, запись в {config.run_id}..."}
+            "message": f"Восстановлено {n} программ из {config.run_id}, возобновляю {config.phf}..."}
 
 
 @app.post("/api/stop")
