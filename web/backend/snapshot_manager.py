@@ -288,6 +288,38 @@ class SnapshotManager:
             bins: dict = history.setdefault("bins", {})
             dirty = False
 
+            # Reclassify programs previously saved as "unplaced" that now
+            # have a known cell assignment in the archive reverse index.
+            for pid, cell in list(self._last_archive.items()):
+                if cell != "unplaced":
+                    continue
+                actual_cell = reverse.get(pid)
+                if actual_cell is None:
+                    continue
+                raw = r.get(f"{phf}:program:{pid}")
+                if not raw:
+                    continue
+                try:
+                    data = json.loads(raw)
+                except Exception:
+                    continue
+                name = _program_name(data, pid)
+                unplaced_bin = bins.get("unplaced", [])
+                entry = next((e for e in unplaced_bin if e["name"] == name), None)
+                if entry is not None:
+                    unplaced_bin.remove(entry)
+                    if not unplaced_bin:
+                        bins.pop("unplaced", None)
+                    bins.setdefault(actual_cell, []).append(entry)
+                    src = run_dir / _cell_to_folder("unplaced") / f"{name}.py"
+                    dst_dir = run_dir / _cell_to_folder(actual_cell)
+                    dst_dir.mkdir(parents=True, exist_ok=True)
+                    dst = dst_dir / f"{name}.py"
+                    if src.exists() and not dst.exists():
+                        src.rename(dst)
+                    dirty = True
+                self._last_archive[pid] = actual_cell
+
             for pk in prog_keys:
                 pid = pk.split(":")[-1]  # UUID part
                 if pid in self._last_archive:
