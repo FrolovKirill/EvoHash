@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react'
-import { Play, Square, CheckCircle, XCircle, AlertCircle, RotateCcw, Trash2 } from 'lucide-react'
+import { Play, Square, CheckCircle, XCircle, AlertCircle, RotateCcw, Trash2, History } from 'lucide-react'
 import { apiFetch, useStatus, useEnvCheck } from '../hooks/useApi'
 import StatusBadge from '../components/StatusBadge'
 
 const PHF_OPTIONS = [
-  { value: 'phash', label: 'pHash', desc: '64-bit, Hamming ≤ 12' },
-  { value: 'pdq', label: 'PDQ', desc: '256-bit, Hamming ≤ 92' },
-  { value: 'neuralhash', label: 'NeuralHash', desc: '96-bit, Hamming ≤ 17' },
-  { value: 'photodna', label: 'PhotoDNA', desc: '144-byte, L1 ≤ 3855 (Docker)' },
+  { value: 'phash', label: 'pHash', desc: '64-bit, Hamming <= 12' },
+  { value: 'pdq', label: 'PDQ', desc: '256-bit, Hamming <= 92' },
+  { value: 'neuralhash', label: 'NeuralHash', desc: '96-bit, Hamming <= 17' },
+  { value: 'photodna', label: 'PhotoDNA', desc: '144-byte, L1 <= 3855 (Docker)' },
 ]
 
 const DEFAULTS = { phf: 'phash', generations: 50, llm: 'openrouter_gpt_oss', nPairs: 10 }
@@ -45,6 +45,11 @@ export default function Dashboard() {
   const [clearMsg, setClearMsg] = useState<string | null>(null)
   const [llmOptions, setLlmOptions] = useState<{key: string, model_id: string, label: string}[]>([])
 
+  // Resume modal state
+  const [showResume, setShowResume] = useState(false)
+  const [runs, setRuns] = useState<any[]>([])
+  const [loadingRuns, setLoadingRuns] = useState(false)
+
   useEffect(() => {
     apiFetch('/api/models').then((d: any) => setLlmOptions(d.models ?? [])).catch(() => {})
   }, [])
@@ -61,12 +66,58 @@ export default function Dashboard() {
   async function handleStart() {
     setStarting(true)
     try {
-      await apiFetch('/api/run', {
+      const res = await apiFetch('/api/run', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phf, generations: generationsNum, llm_config: llm, n_pairs: nPairsNum }),
       })
-      const run = { phf, generations: generationsNum, llm, nPairs: nPairsNum, startedAt: new Date().toLocaleString('ru-RU') }
+      const run = {
+        phf, generations: generationsNum, llm, nPairs: nPairsNum,
+        startedAt: new Date().toLocaleString('ru-RU'),
+        run_id: res.run_id,
+      }
+      localStorage.setItem(LAST_RUN_KEY, JSON.stringify(run))
+      setLastRun(run)
+    } finally {
+      setStarting(false)
+    }
+  }
+
+  async function handleOpenResume() {
+    setShowResume(true)
+    setLoadingRuns(true)
+    try {
+      const res = await apiFetch(`/api/runs?phf=${phf}`)
+      setRuns(res.runs ?? [])
+    } catch {
+      setRuns([])
+    } finally {
+      setLoadingRuns(false)
+    }
+  }
+
+  async function handleResume(runId: string) {
+    setShowResume(false)
+    setStarting(true)
+    try {
+      const res = await apiFetch('/api/run-resume', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phf, run_id: runId,
+          generations: generationsNum, llm_config: llm, n_pairs: nPairsNum,
+        }),
+      })
+      if (!res.ok) {
+        setClearMsg(res.message || 'Ошибка возобновления')
+        setTimeout(() => setClearMsg(null), 4000)
+        return
+      }
+      const run = {
+        phf, generations: generationsNum, llm, nPairs: nPairsNum,
+        startedAt: new Date().toLocaleString('ru-RU'),
+        run_id: runId, resumed: true,
+      }
       localStorage.setItem(LAST_RUN_KEY, JSON.stringify(run))
       setLastRun(run)
     } finally {
@@ -116,7 +167,7 @@ export default function Dashboard() {
           <div className="grid grid-cols-2 gap-2 text-sm">
             <EnvRow ok={checks.gigaevo_core} label="gigaevo-core" hint="Клонируй: git clone .../gigaevo-core" />
             <EnvRow ok={checks.dataset} label={`Датасет (${checks.dataset_count} изображений)`} hint="Будет скачан автоматически" />
-            <EnvRow ok={checks.env_file} label=".env файл" hint="Скопируй .env.example → .env" />
+            <EnvRow ok={checks.env_file} label=".env файл" hint="Скопируй .env.example -> .env" />
             <EnvRow ok={checks.api_key} label="OPENROUTER_API_KEY" hint="Укажи в .env" />
           </div>
         </div>
@@ -198,14 +249,24 @@ export default function Dashboard() {
       {/* Buttons */}
       <div className="flex items-center gap-3 flex-wrap">
         {!isRunning ? (
-          <button
-            onClick={handleStart}
-            disabled={starting || checks?.gigaevo_core === false}
-            className="flex items-center gap-2 px-6 py-3 bg-brand text-black font-bold rounded hover:bg-brand/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all text-sm"
-          >
-            <Play size={16} />
-            {starting ? 'Запуск...' : 'СТАРТ'}
-          </button>
+          <>
+            <button
+              onClick={handleStart}
+              disabled={starting || checks?.gigaevo_core === false}
+              className="flex items-center gap-2 px-6 py-3 bg-brand text-black font-bold rounded hover:bg-brand/90 disabled:opacity-40 disabled:cursor-not-allowed transition-all text-sm"
+            >
+              <Play size={16} />
+              {starting ? 'Запуск...' : 'НОВЫЙ ЗАПУСК'}
+            </button>
+            <button
+              onClick={handleOpenResume}
+              disabled={starting || checks?.gigaevo_core === false}
+              className="flex items-center gap-2 px-6 py-3 bg-dark-1 text-brand font-bold rounded border border-brand/50 hover:bg-brand/10 disabled:opacity-40 disabled:cursor-not-allowed transition-all text-sm"
+            >
+              <History size={16} />
+              ВОЗОБНОВИТЬ
+            </button>
+          </>
         ) : (
           <button
             onClick={handleStop}
@@ -240,9 +301,50 @@ export default function Dashboard() {
       {/* Clear message toast */}
       {clearMsg && (
         <div className={`mt-4 px-4 py-2 rounded text-sm inline-block ${
-          clearMsg.includes('остановите') ? 'bg-red-500/10 text-red-400 border border-red-500/30' : 'bg-green-500/10 text-green-400 border border-green-500/30'
+          clearMsg.includes('остановите') || clearMsg.includes('Ошибка') ? 'bg-red-500/10 text-red-400 border border-red-500/30' : 'bg-green-500/10 text-green-400 border border-green-500/30'
         }`}>
           {clearMsg}
+        </div>
+      )}
+
+      {/* Resume modal */}
+      {showResume && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setShowResume(false)}>
+          <div className="bg-dark-1 border border-gray-700 rounded-lg p-6 max-w-lg w-full mx-4 max-h-[70vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg font-bold text-white">Возобновить запуск — {PHF_OPTIONS.find(o => o.value === phf)?.label}</h2>
+              <button onClick={() => setShowResume(false)} className="text-gray-500 hover:text-white text-xl">&times;</button>
+            </div>
+            {loadingRuns ? (
+              <div className="text-gray-500 text-sm py-8 text-center">Загрузка...</div>
+            ) : runs.length === 0 ? (
+              <div className="text-gray-500 text-sm py-8 text-center">
+                Нет сохранённых запусков для {PHF_OPTIONS.find(o => o.value === phf)?.label}.
+                <br />Запустите новую эволюцию — снапшоты сохраняются автоматически.
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {runs.map((run: any) => (
+                  <button
+                    key={run.run_id}
+                    onClick={() => handleResume(run.run_id)}
+                    className="text-left p-4 rounded border border-gray-700 hover:border-brand hover:bg-brand/5 transition-all"
+                  >
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="text-brand font-mono text-sm">{run.run_id}</span>
+                      <span className="text-gray-500 text-xs">{run.timestamp || run.last_updated || ''}</span>
+                    </div>
+                    <div className="text-xs text-gray-400">
+                      {run.programs ?? 0} программ
+                      {run.total_seen ? ` | ${run.total_seen} всего видели` : ''}
+                      {run.analyzed ? ` | ${run.analyzed} проанализировано` : ''}
+                      {run.snapshot_count ? ` | ${run.snapshot_count} снапшотов` : ''}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -268,9 +370,11 @@ export default function Dashboard() {
               <div className="text-white">{lastRun.nPairs}</div>
             </div>
           </div>
-          {lastRun.startedAt && (
-            <div className="text-xs text-gray-600 mt-3">Запущено: {lastRun.startedAt}</div>
-          )}
+          <div className="text-xs text-gray-600 mt-3">
+            {lastRun.resumed && <span className="text-brand mr-2">[возобновлён]</span>}
+            {lastRun.run_id && <span className="text-gray-500 mr-2">{lastRun.run_id}</span>}
+            {lastRun.startedAt && <span>Запущено: {lastRun.startedAt}</span>}
+          </div>
         </div>
       )}
     </div>

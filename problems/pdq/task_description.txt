@@ -1,8 +1,8 @@
 **TASK**: Evolve a Python attack strategy that generates hash collisions against PDQ (Perceptual hash by Facebook/Meta).
 
-══════════════════════════════════════════════════════════════════════════════
+==============================================================================
 BACKGROUND
-══════════════════════════════════════════════════════════════════════════════
+==============================================================================
 
 PDQ is a perceptual hash developed by Facebook/Meta for photo matching at scale.
 It produces a 256-bit binary hash using the following steps:
@@ -32,9 +32,9 @@ READING THE TARGET HASH:
   bits_to_flip = source_hash ^ target_hash  -> which bits must change
   You need to flip AT LEAST (current_distance - 92) bits to achieve a collision.
 
-══════════════════════════════════════════════════════════════════════════════
+==============================================================================
 CRITICAL PITFALLS -- READ BEFORE WRITING ANY ATTACK
-══════════════════════════════════════════════════════════════════════════════
+==============================================================================
 
   X DO NOT work in the original 224x224x3 RGB pixel space.
     PDQ downsamples to 64x64 grayscale -- perturbations at the original
@@ -57,9 +57,9 @@ CRITICAL PITFALLS -- READ BEFORE WRITING ANY ATTACK
     Uniform brightness shifts are largely cancelled out. Perturbations must
     create local contrast differences, not global brightness changes.
 
-══════════════════════════════════════════════════════════════════════════════
+==============================================================================
 PERFORMANCE METRIC
-══════════════════════════════════════════════════════════════════════════════
+==============================================================================
 
   efficiency = ASR / (mean_L2 + e)   <- MAXIMISE THIS
 
@@ -67,9 +67,9 @@ PERFORMANCE METRIC
   - mean_L2: mean normalised L2 distortion = ||d||_2 / sqrt(H*W*C)
   - Higher efficiency = more successful attacks with less visible distortion
 
-══════════════════════════════════════════════════════════════════════════════
+==============================================================================
 FUNCTION CONTRACT
-══════════════════════════════════════════════════════════════════════════════
+==============================================================================
 
 Your function MUST be named ``entrypoint`` and accept a single ``context`` dict:
 
@@ -96,9 +96,9 @@ Return value must be a dict with:
           "final_dist" : float, # final hash distance achieved (optional)
       }
 
-══════════════════════════════════════════════════════════════════════════════
+==============================================================================
 ATTACK STRATEGIES -- RANKED BY EFFECTIVENESS
-══════════════════════════════════════════════════════════════════════════════
+==============================================================================
 
 The most effective attacks work analytically in the 64x64 grayscale DCT domain.
 Dimensionality: 64x64 = 4096 values (vs 224x224x3 = 150k -- avoid pixel space).
@@ -141,9 +141,9 @@ The generous threshold (92/256 = 36%) means even imprecise attacks often succeed
     but integer distance still causes stalling. Use large sigma (>= 8.0).
     Best as a refinement step after analytical initialisation.
 
-══════════════════════════════════════════════════════════════════════════════
+==============================================================================
 AVAILABLE IMPORTS
-══════════════════════════════════════════════════════════════════════════════
+==============================================================================
 
 Standard library and the following packages are available:
   numpy, scipy, PIL (Pillow), pdqhash
@@ -151,8 +151,8 @@ Standard library and the following packages are available:
 Do NOT import torch, tensorflow, or other deep-learning frameworks -- the
 evaluator runs in a CPU-only environment.
 
-══════════════════════════════════════════════════════════════════════════════
+==============================================================================
 CURRENT BEST PERFORMER
-══════════════════════════════════════════════════════════════════════════════
+==============================================================================
 
 [filled automatically by the evolution framework]

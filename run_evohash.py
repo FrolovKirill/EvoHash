@@ -110,11 +110,11 @@ def _check_prerequisites(phf: str) -> None:
 
 
     if phf == "neuralhash":
-        import platform
-        if platform.system() != "Darwin":
+        onnx_path = problem_dir.parent.parent / "data" / "neuralhash_model" / "model.onnx"
+        if not onnx_path.exists():
             raise SystemExit(
-                "NeuralHash requires macOS (uses Apple Vision framework).\n"
-                "Install PyObjC: pip install pyobjc-framework-Vision pyobjc-core"
+                f"NeuralHash ONNX model not found: {onnx_path}\n"
+                "Download from https://github.com/AsuharietYgvar/AppleNeuralHash2ONNX"
             )
 
 

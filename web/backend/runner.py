@@ -90,7 +90,8 @@ class Runner:
             pass
 
     async def start(self, phf: str, generations: int, llm_config: str,
-                    n_pairs: int = 10, redis_port: int = 6379, redis_db: int = 0) -> None:
+                    n_pairs: int = 10, redis_port: int = 6379, redis_db: int = 0,
+                    resume: bool = False) -> None:
         if self.status == Status.RUNNING:
             return
 
@@ -104,15 +105,15 @@ class Runner:
         self.generations_done = 0
         self.error_message = ""
 
-        # Flush the Redis DB so gigaevo loads initial programs fresh
-        # (resume mode skips archive population — programs never enter the island)
-        try:
-            import redis as redis_lib
-            r = redis_lib.Redis(port=redis_port, db=redis_db, socket_connect_timeout=2)
-            r.flushdb()
-            r.close()
-        except Exception:
-            pass
+        # Flush the Redis DB for fresh runs (resume keeps existing data)
+        if not resume:
+            try:
+                import redis as redis_lib
+                r = redis_lib.Redis(port=redis_port, db=redis_db, socket_connect_timeout=2)
+                r.flushdb()
+                r.close()
+            except Exception:
+                pass
 
         # Clear best grid tracker so new run starts fresh
         try:
@@ -178,8 +179,10 @@ class Runner:
             "--max-generations", str(generations),
             "--llm", llm_config,
             "--redis-db", str(redis_db),
-            "--", f"redis.port={redis_port}",
         ]
+        if resume:
+            cmd.append("--resume")
+        cmd.extend(["--", f"redis.port={redis_port}"])
 
         self.process = subprocess.Popen(
             cmd,

@@ -35,15 +35,26 @@ python web/run_web.py
 **Запуск** — configuration and launch page.
 - Select target PHF (pHash, PDQ, NeuralHash, PhotoDNA) and LLM model from dropdown (models loaded from `config/models.yaml`)
 - Set number of generations and image pairs per evaluation
-- Start / stop evolution with a single button
+- Two launch modes:
+  - **Новый запуск** — starts fresh evolution (flushes Redis, creates a new run with auto-generated ID like `run_20260323_145500`)
+  - **Возобновить** — opens a modal listing all saved runs for the selected PHF. Selecting a run loads its latest snapshot into Redis and resumes evolution with `--resume`. Snapshots and analysis continue in the same run folder.
+- Stop button halts evolution and analysis
 - "Clear data" button flushes the Redis DB and resets logs
-- Shows last run parameters for reference
+- Shows last run info (including run ID and whether it was resumed)
 - Runs `/api/check-env` on load to verify that gigaevo-core, dataset, Redis, and API key are all set up correctly
 
 **Монитор** — live dashboard during evolution.
 - Real-time colorized log stream via WebSocket (`/ws/logs`)
 - Efficiency and ASR chart updated each generation
 - Metric cards for best and latest programs (efficiency, ASR, L2, queries)
+- **Анализ** tab: LLM-based classification of evolved programs against baseline attack
+  patterns (NES, SimBa, HSJA, etc.). Shows a table with each program's metrics and top-3
+  most similar baselines with similarity scores. Includes cell counts (active / total ever /
+  replaced), timestamp of last analysis, and tick timing (start → finish) so you can see
+  how long each analysis cycle takes. Analysis runs automatically every 5 minutes
+  while evolution is active, performs a final tick when evolution ends, and saves snapshots
+  to `snapshots/{phf}/{run_id}/`. Stops automatically when evolution finishes or is stopped
+  manually.
 - Image grid tabs: source / target / attacked / diff images, auto-refreshed every 2 seconds
 - Status bar showing current generation progress
 
@@ -64,8 +75,10 @@ The backend exposes a REST API at `http://localhost:8765/api/`. Interactive docs
 | Endpoint | Method | Description |
 |---|---|---|
 | `/api/status` | GET | Current run status, generation progress |
-| `/api/run` | POST | Start evolution (accepts PHF, generations, model, etc.) |
-| `/api/stop` | POST | Stop running evolution |
+| `/api/run` | POST | Start new evolution (creates new run ID, flushes Redis) |
+| `/api/run-resume` | POST | Resume evolution from a saved run (loads snapshot into Redis) |
+| `/api/runs?phf=` | GET | List saved runs for a PHF (for resume picker) |
+| `/api/stop` | POST | Stop running evolution and analysis |
 | `/api/clear-data` | POST | Flush Redis DB and reset state |
 | `/api/programs` | GET | List evolved programs from Redis |
 | `/api/metrics` | GET | Best program metrics |
@@ -74,6 +87,7 @@ The backend exposes a REST API at `http://localhost:8765/api/`. Interactive docs
 | `/api/grid-image` | GET | Best/latest image grid (PNG) |
 | `/api/models` | GET | Available LLM models from `config/models.yaml` |
 | `/api/check-env` | GET | Verify prerequisites (Redis, data, API key, gigaevo) |
+| `/api/analysis` | GET | LLM pattern analysis results (programs, top-3, timestamps) |
 | `/api/baselines` | GET | Baseline evaluation results |
 | `/api/run-baselines` | POST | Run baseline evaluation |
 | `/ws/logs` | WebSocket | Live log stream + generation status updates |
@@ -283,27 +297,44 @@ Terminal 2:  python scripts/show_best.py phash --watch 30
 to JSON files and optionally classifies each evolved program against known baseline attack
 patterns using an LLM (via OpenRouter API).
 
+Snapshots are organized by run:
+```
+snapshots/
+  phash/
+    run_20260323_145500/
+      _history.json              # all_seen_ids + analysis_cache
+      phash_20260323_145500.json # periodic snapshots
+      phash_20260323_150000.json
+    run_20260323_160000/
+      ...
+  pdq/
+    ...
+```
+
 ```bash
 # Save a one-off snapshot
 python scripts/archive_manager.py save phash
 
-# Auto-save every 5 minutes while evolution runs (Ctrl+C to stop)
+# Auto-save every 5 minutes (creates new run automatically)
 python scripts/archive_manager.py watch phash --interval 300
 
-# Auto-save + LLM pattern analysis (classifies code against NES, SimBa, HSJA, etc.)
+# Auto-save + LLM pattern analysis
 python scripts/archive_manager.py watch phash --analyze --interval 300
+
+# Continue saving into an existing run
+python scripts/archive_manager.py watch phash --run run_20260323_145500 --analyze
 
 # Use a different model for analysis (default: openai/gpt-oss-120b)
 python scripts/archive_manager.py watch phash --analyze --model qwen/qwen3.5-122b-a10b
 
 # Load a snapshot back into Redis
-python scripts/archive_manager.py load phash --file snapshots/phash/my_run.json
+python scripts/archive_manager.py load phash --file snapshots/phash/run_20260323_145500/phash_20260323_150000.json
 
 # Load and overwrite (clears existing keys for this PHF first)
-python scripts/archive_manager.py load phash --file snapshots/phash/my_run.json --overwrite
+python scripts/archive_manager.py load phash --file snapshots/phash/run_20260323_145500/phash_20260323_150000.json --overwrite
 
 # Show stats about a snapshot (no Redis needed)
-python scripts/archive_manager.py info --file snapshots/phash/my_run.json
+python scripts/archive_manager.py info --file snapshots/phash/run_20260323_145500/phash_20260323_150000.json
 
 # Compare two snapshots (added / removed / changed programs)
 python scripts/archive_manager.py diff --old snap1.json --new snap2.json
@@ -323,8 +354,9 @@ The `watch` mode prints a live summary table:
 - **Total ever** — every program ID ever observed (tracks replacements)
 - **Top-3 baselines** — LLM-assigned similarity to known attack patterns (0-100%)
 
-Snapshots are saved to `snapshots/{phf}/` (gitignored). Analysis results and history
-are cached in `snapshots/{phf}/_history.json` to avoid redundant API calls.
+Snapshots are saved to `snapshots/{phf}/{run_id}/` (gitignored). Analysis results and
+history are cached in `_history.json` inside each run folder to avoid redundant API calls.
+When resuming via Web UI, the latest snapshot is loaded back into Redis automatically.
 
 For standalone analysis without snapshots, use `scripts/analyze_patterns.py`:
 
@@ -400,3 +432,6 @@ The notebook is independent of GigaEvo and Redis — it can run in parallel with
 
 **Web UI: "Frontend ещё не собран"**
 → Run `cd web/frontend && npm install && npm run build` to build the frontend manually.
+
+**Windows: `UnicodeDecodeError: 'charmap' codec can't decode byte`**
+→ This happens when gigaevo reads task description files containing non-ASCII characters with the default Windows encoding (cp1252). The fix is applied in `gigaevo-core/gigaevo/problems/context.py` — `read_text(encoding="utf-8")`. If you get this error after a fresh clone of gigaevo-core, apply the same one-line fix.

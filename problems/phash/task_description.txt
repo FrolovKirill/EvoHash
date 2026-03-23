@@ -1,8 +1,8 @@
 **TASK**: Evolve a Python attack strategy that generates hash collisions against pHash (perceptual hash).
 
-══════════════════════════════════════════════════════════════════════════════
+==============================================================================
 BACKGROUND
-══════════════════════════════════════════════════════════════════════════════
+==============================================================================
 
 pHash maps images to 64-bit hashes using the following steps:
   1. Convert RGB image to GRAYSCALE  ← CRITICAL: hash ignores colour entirely
@@ -23,9 +23,9 @@ READING THE TARGET HASH:
   bits_to_flip = source_hash.hash ^ target_hash.hash  → which bits must change
   You need to flip AT LEAST (current_distance - 12) bits to achieve a collision.
 
-══════════════════════════════════════════════════════════════════════════════
+==============================================================================
 ⚠ CRITICAL PITFALLS — READ BEFORE WRITING ANY ATTACK
-══════════════════════════════════════════════════════════════════════════════
+==============================================================================
 
   ✗ DO NOT work in the original 224×224×3 RGB pixel space.
     pHash downsamples to 32×32 grayscale — perturbations at the original
@@ -42,9 +42,9 @@ READING THE TARGET HASH:
     Grayscale conversion weights: Y = 0.299·R + 0.587·G + 0.114·B.
     A perturbation invisible after grayscale conversion has zero effect on the hash.
 
-══════════════════════════════════════════════════════════════════════════════
+==============================================================================
 PERFORMANCE METRIC
-══════════════════════════════════════════════════════════════════════════════
+==============================================================================
 
   efficiency = ASR / (mean_L2 + ε)   ← MAXIMISE THIS
 
@@ -52,9 +52,9 @@ PERFORMANCE METRIC
   - mean_L2: mean normalised L2 distortion = ‖δ‖₂ / √(H·W·C)
   - Higher efficiency = more successful attacks with less visible distortion
 
-══════════════════════════════════════════════════════════════════════════════
+==============================================================================
 FUNCTION CONTRACT
-══════════════════════════════════════════════════════════════════════════════
+==============================================================================
 
 Your function MUST be named ``entrypoint`` and accept a single ``context`` dict:
 
@@ -80,9 +80,9 @@ Return value must be a dict with:
           "final_dist" : float, # final hash distance achieved (optional)
       }
 
-══════════════════════════════════════════════════════════════════════════════
+==============================================================================
 ATTACK STRATEGIES — RANKED BY EFFECTIVENESS
-══════════════════════════════════════════════════════════════════════════════
+==============================================================================
 
 The most effective attacks work analytically in the 32×32 grayscale DCT domain.
 Dimensionality: 32×32 = 1024 values (vs 224×224×3 = 150k — avoid this space).
@@ -119,9 +119,9 @@ Dimensionality: 32×32 = 1024 values (vs 224×224×3 = 150k — avoid this space
     Use large sigma (≥ 8.0) to cross integer boundaries. Combine with a warm
     start from the analytical approach above for best results.
 
-══════════════════════════════════════════════════════════════════════════════
+==============================================================================
 AVAILABLE IMPORTS
-══════════════════════════════════════════════════════════════════════════════
+==============================================================================
 
 Standard library and the following packages are available:
   numpy, scipy, PIL (Pillow), imagehash
@@ -129,8 +129,8 @@ Standard library and the following packages are available:
 Do NOT import torch, tensorflow, or other deep-learning frameworks — the
 evaluator runs in a CPU-only environment.
 
-══════════════════════════════════════════════════════════════════════════════
+==============================================================================
 CURRENT BEST PERFORMER
-══════════════════════════════════════════════════════════════════════════════
+==============================================================================
 
 [filled automatically by the evolution framework]

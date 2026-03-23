@@ -15,6 +15,7 @@ from pydantic import BaseModel
 
 from redis_bridge import get_best_metrics, get_latest_metrics, get_programs, reset_client, build_metrics_history
 from runner import Status, runner
+from analysis_bridge import analysis_manager, generate_run_id, list_runs
 
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 FRONTEND_DIST = Path(__file__).parent.parent / "frontend" / "dist"
@@ -26,6 +27,7 @@ app = FastAPI(title="EvoHash Web UI")
 def shutdown_event():
     """Kill any running evolution subprocess when the server stops."""
     runner.stop()
+    analysis_manager.stop()
 
 app.add_middleware(
     CORSMiddleware,
@@ -44,6 +46,16 @@ if FRONTEND_DIST.exists():
 
 class RunConfig(BaseModel):
     phf: str = "phash"
+    generations: int = 50
+    llm_config: str = "openrouter_gpt_oss"
+    n_pairs: int = 10
+    redis_port: int = 6379
+    redis_db: int = 0
+
+
+class ResumeConfig(BaseModel):
+    phf: str
+    run_id: str
     generations: int = 50
     llm_config: str = "openrouter_gpt_oss"
     n_pairs: int = 10
@@ -75,12 +87,35 @@ async def get_status():
     }
 
 
+async def _run_with_analysis(phf: str, run_id: str, redis_port: int, redis_db: int):
+    """Wait for evolution to start, run analysis alongside, stop when done."""
+    await asyncio.sleep(5)
+    analysis_manager.start(
+        phf=phf, run_id=run_id,
+        redis_port=redis_port, redis_db=redis_db,
+        interval=300,
+    )
+    while runner.status == Status.RUNNING:
+        await asyncio.sleep(2)
+    # Final analysis tick after evolution ends
+    await analysis_manager.final_tick(phf, redis_port, redis_db)
+    analysis_manager.stop()
+
+
+@app.get("/api/runs")
+async def get_runs(phf: str = "phash"):
+    return {"runs": list_runs(phf)}
+
+
 @app.post("/api/run")
 async def start_run(config: RunConfig):
     if runner.status == Status.RUNNING:
         return {"ok": False, "message": "Уже запущено"}
-    asyncio.create_task(
-        runner.start(
+
+    run_id = generate_run_id()
+
+    async def _start():
+        await runner.start(
             phf=config.phf,
             generations=config.generations,
             llm_config=config.llm_config,
@@ -88,13 +123,64 @@ async def start_run(config: RunConfig):
             redis_port=config.redis_port,
             redis_db=config.redis_db,
         )
-    )
-    return {"ok": True, "message": f"Запускаю {config.phf}..."}
+        await _run_with_analysis(config.phf, run_id, config.redis_port, config.redis_db)
+
+    asyncio.create_task(_start())
+    return {"ok": True, "run_id": run_id, "message": f"Запускаю {config.phf} (новый run: {run_id})..."}
+
+
+@app.post("/api/run-resume")
+async def resume_run(config: ResumeConfig):
+    if runner.status == Status.RUNNING:
+        return {"ok": False, "message": "Уже запущено"}
+
+    # Load snapshot into Redis before starting
+    from analysis_bridge import SNAPSHOTS_DIR
+    run_dir = SNAPSHOTS_DIR / config.phf / config.run_id
+    if not run_dir.exists():
+        return {"ok": False, "message": f"Run {config.run_id} не найден"}
+
+    # Find latest snapshot and load it
+    snapshots = sorted(run_dir.glob(f"{config.phf}_*.json"))
+    if not snapshots:
+        return {"ok": False, "message": f"Нет снапшотов в {config.run_id}"}
+
+    latest_snap = snapshots[-1]
+    try:
+        import redis as redis_lib
+        r = redis_lib.Redis(port=config.redis_port, db=config.redis_db,
+                            decode_responses=True, socket_connect_timeout=2)
+        r.flushdb()
+        snap_data = json.loads(latest_snap.read_text(encoding="utf-8"))
+        programs = snap_data.get("programs", {})
+        for key, prog in programs.items():
+            value = prog if isinstance(prog, str) else json.dumps(prog, ensure_ascii=False)
+            r.set(key, value)
+        r.close()
+    except Exception as e:
+        return {"ok": False, "message": f"Ошибка загрузки: {e}"}
+
+    async def _resume():
+        await runner.start(
+            phf=config.phf,
+            generations=config.generations,
+            llm_config=config.llm_config,
+            n_pairs=config.n_pairs,
+            redis_port=config.redis_port,
+            redis_db=config.redis_db,
+            resume=True,
+        )
+        await _run_with_analysis(config.phf, config.run_id, config.redis_port, config.redis_db)
+
+    asyncio.create_task(_resume())
+    return {"ok": True, "run_id": config.run_id,
+            "message": f"Возобновляю {config.phf} из {config.run_id} ({len(programs)} программ)..."}
 
 
 @app.post("/api/stop")
 async def stop_run():
     runner.stop()
+    analysis_manager.stop()
     return {"ok": True}
 
 
@@ -247,6 +333,11 @@ async def check_env():
     except Exception:
         checks["redis"] = False
     return checks
+
+
+@app.get("/api/analysis")
+async def get_analysis():
+    return analysis_manager.get_state()
 
 
 # ─── WebSocket for live logs ────────────────────────────────────────────────────

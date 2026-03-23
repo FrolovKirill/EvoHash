@@ -416,10 +416,12 @@ def main() -> None:
     # --- watch ---
     s_watch = sub.add_parser("watch", help="Auto-save snapshots + LLM analysis")
     s_watch.add_argument("phf", help="PHF name (phash, pdq, neuralhash)")
+    s_watch.add_argument("--run", default=None,
+                         help="Run ID (default: auto-generated run_YYYYMMDD_HHMMSS)")
     s_watch.add_argument("--interval", type=int, default=300, metavar="SEC",
                          help="Seconds between snapshots (default: 300 = 5min)")
     s_watch.add_argument("--dir", type=Path, default=None,
-                         help="Snapshots directory (default: snapshots/{phf}/)")
+                         help="Snapshots directory (overrides --run)")
     s_watch.add_argument("--analyze", action="store_true",
                          help="Enable LLM pattern analysis on new programs")
     s_watch.add_argument("--model", default="openai/gpt-oss-120b",
@@ -466,7 +468,11 @@ def main() -> None:
         load_archive(r, args.phf, args.file, args.overwrite)
 
     elif args.command == "watch":
-        snap_dir = args.dir or Path("snapshots") / args.phf
+        if args.dir:
+            snap_dir = args.dir
+        else:
+            run_id = args.run or f"run_{time.strftime('%Y%m%d_%H%M%S')}"
+            snap_dir = Path("snapshots") / args.phf / run_id
         watch_archive(r, args.phf, args.interval, snap_dir, args.analyze, args.model)
 
 
