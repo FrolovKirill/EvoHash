@@ -5,51 +5,51 @@ BACKGROUND
 ==============================================================================
 
 pHash maps images to 64-bit hashes using the following steps:
-  1. Convert RGB image to GRAYSCALE  ← CRITICAL: hash ignores colour entirely
-  2. Resize grayscale image to 32×32 (1024 pixels total)
-  3. Apply 2D DCT (Discrete Cosine Transform) to the 32×32 grayscale image
-  4. Keep top-left 8×8 block (64 low-frequency coefficients)
-  5. Threshold each coefficient against the MEAN of those 64 coefficients → 64-bit binary hash
+  1. Convert RGB image to GRAYSCALE  <- CRITICAL: hash ignores colour entirely
+  2. Resize grayscale image to 32x32 (1024 pixels total)
+  3. Apply 2D DCT (Discrete Cosine Transform) to the 32x32 grayscale image
+  4. Keep top-left 8x8 block (64 low-frequency coefficients)
+  5. Threshold each coefficient against the MEAN of those 64 coefficients -> 64-bit binary hash
      bit[i] = 1  if  dct[i] > mean(dct),  else  0
 
-Two images are a **collision** when their Hamming distance ≤ 12 bits (out of 64).
+Two images are a **collision** when their Hamming distance <= 12 bits (out of 64).
 
 GOAL: minimally perturb a source image so its pHash matches a target hash.
 
 READING THE TARGET HASH:
-  target_hash.hash         → 8×8 numpy bool array of target bits
+  target_hash.hash         -> 8x8 numpy bool array of target bits
   source_hash = hash_fn.compute(source_image)
-  source_hash.hash         → 8×8 numpy bool array of source bits
-  bits_to_flip = source_hash.hash ^ target_hash.hash  → which bits must change
+  source_hash.hash         -> 8x8 numpy bool array of source bits
+  bits_to_flip = source_hash.hash ^ target_hash.hash  -> which bits must change
   You need to flip AT LEAST (current_distance - 12) bits to achieve a collision.
 
 ==============================================================================
-⚠ CRITICAL PITFALLS — READ BEFORE WRITING ANY ATTACK
+ CRITICAL PITFALLS -- READ BEFORE WRITING ANY ATTACK
 ==============================================================================
 
-  ✗ DO NOT work in the original 224×224×3 RGB pixel space.
-    pHash downsamples to 32×32 grayscale — perturbations at the original
-    resolution get averaged and attenuated. Work in 32×32 grayscale space,
+  X DO NOT work in the original 224x224x3 RGB pixel space.
+    pHash downsamples to 32x32 grayscale -- perturbations at the original
+    resolution get averaged and attenuated. Work in 32x32 grayscale space,
     then upsample the perturbation back to the original resolution.
 
-  ✗ DO NOT rely on gradient estimation (NES, ZO-SGD, finite differences)
+  X DO NOT rely on gradient estimation (NES, ZO-SGD, finite differences)
     as the primary driver.
     Hash distance is an INTEGER (Hamming distance). It is piecewise-constant:
     most small perturbations produce d_pos - d_neg = 0, giving a zero gradient
     estimate. Gradient methods stall immediately and waste all query budget.
 
-  ✗ DO NOT apply perturbations only to RGB channels independently.
-    Grayscale conversion weights: Y = 0.299·R + 0.587·G + 0.114·B.
+  X DO NOT apply perturbations only to RGB channels independently.
+    Grayscale conversion weights: Y = 0.299*R + 0.587*G + 0.114*B.
     A perturbation invisible after grayscale conversion has zero effect on the hash.
 
 ==============================================================================
 PERFORMANCE METRIC
 ==============================================================================
 
-  efficiency = ASR / (mean_L2 + ε)   ← MAXIMISE THIS
+  efficiency = ASR / (mean_L2 + e)   <- MAXIMISE THIS
 
-  - ASR (Attack Success Rate): fraction of image pairs where hash_distance ≤ 12
-  - mean_L2: mean normalised L2 distortion = ‖δ‖₂ / √(H·W·C)
+  - ASR (Attack Success Rate): fraction of image pairs where hash_distance <= 12
+  - mean_L2: mean normalised L2 distortion = ||d||_2 / sqrt(H*W*C)
   - Higher efficiency = more successful attacks with less visible distortion
 
 ==============================================================================
@@ -62,61 +62,61 @@ Your function MUST be named ``entrypoint`` and accept a single ``context`` dict:
       ...
 
 Context keys:
-  - context["source_images"]  : list of PIL.Image.Image (RGB, 224×224)
+  - context["source_images"]  : list of PIL.Image.Image (RGB, 224x224)
   - context["target_hashes"]  : list of imagehash.ImageHash objects
-  - context["target_images"]  : list of PIL.Image.Image — the actual target images
+  - context["target_images"]  : list of PIL.Image.Image -- the actual target images
                                  (their hash == target_hash by definition, so they are
                                   guaranteed starting collisions for boundary-walk attacks)
   - context["hash_fn"]        : PHashWrapper with .compute(img) and .distance(h1, h2)
   - context["threshold"]      : int = 12 (collision threshold)
 
 Return value must be a dict with:
-  - "attacked_images" : list[PIL.Image.Image]  — one perturbed image per source
-  - "metrics"         : list[dict]             — one metric dict per image:
+  - "attacked_images" : list[PIL.Image.Image]  -- one perturbed image per source
+  - "metrics"         : list[dict]             -- one metric dict per image:
       {
-          "success"    : bool,  # True if hash distance ≤ threshold
+          "success"    : bool,  # True if hash distance <= threshold
           "l2"         : float, # normalised L2 distance
           "n_queries"  : int,   # number of hash evaluations used
           "final_dist" : float, # final hash distance achieved (optional)
       }
 
 ==============================================================================
-ATTACK STRATEGIES — RANKED BY EFFECTIVENESS
+ATTACK STRATEGIES -- RANKED BY EFFECTIVENESS
 ==============================================================================
 
-The most effective attacks work analytically in the 32×32 grayscale DCT domain.
-Dimensionality: 32×32 = 1024 values (vs 224×224×3 = 150k — avoid this space).
+The most effective attacks work analytically in the 32x32 grayscale DCT domain.
+Dimensionality: 32x32 = 1024 values (vs 224x224x3 = 150k -- avoid this space).
 
-  ★★★ ANALYTICAL DCT MANIPULATION (most effective)
-    1. Convert source to grayscale 32×32 → apply DCT → get 8×8 block
-    2. Compute target bit pattern from target_hash.hash (8×8 bool array)
+  *** ANALYTICAL DCT MANIPULATION (most effective)
+    1. Convert source to grayscale 32x32 -> apply DCT -> get 8x8 block
+    2. Compute target bit pattern from target_hash.hash (8x8 bool array)
     3. For each bit that needs flipping: push the corresponding DCT coefficient
        across the mean boundary. The mean shifts as you change coefficients,
        so adjust iteratively.
-    4. Apply inverse DCT → upsample perturbation back to 224×224 → add to source.
+    4. Apply inverse DCT -> upsample perturbation back to 224x224 -> add to source.
     Key insight: you know EXACTLY which 64 coefficients determine the hash
     and in which direction each needs to move.
 
-  ★★★ DECISION-BOUNDARY WALK (effective, more queries)
+  *** DECISION-BOUNDARY WALK (effective, more queries)
     HopSkipJump-style: start from the target image (guaranteed collision),
     binary-search to the boundary, then walk the boundary toward the source.
     Works because it only needs a binary oracle (collides / does not collide).
-    Use many gradient samples (≥ 200) and work in 32×32 grayscale space.
+    Use many gradient samples (>= 200) and work in 32x32 grayscale space.
 
-  ★★ BIT-TARGETED COORDINATE DESCENT
+  ** BIT-TARGETED COORDINATE DESCENT
     For each bit that needs flipping, find the DCT basis vector for that
-    (u,v) position in 32×32 space and add a scaled version to the image.
+    (u,v) position in 32x32 space and add a scaled version to the image.
     Each step flips one bit with minimal global distortion.
-    Stop when distance ≤ 12.
+    Stop when distance <= 12.
 
-  ★★ FREQUENCY INJECTION IN 32×32 SPACE
-    Add low-frequency sinusoidal patterns computed in grayscale 32×32 space.
-    Upsample the pattern to 224×224 before adding to the source image.
+  ** FREQUENCY INJECTION IN 32x32 SPACE
+    Add low-frequency sinusoidal patterns computed in grayscale 32x32 space.
+    Upsample the pattern to 224x224 before adding to the source image.
     Low-frequency patterns survive downsampling and strongly affect DCT coefficients.
 
-  ★ GRADIENT-FREE SEARCH (limited effectiveness due to integer loss)
-    If using NES/SimBa/ZO: operate on the 32×32 grayscale image (not 224×224 RGB).
-    Use large sigma (≥ 8.0) to cross integer boundaries. Combine with a warm
+  * GRADIENT-FREE SEARCH (limited effectiveness due to integer loss)
+    If using NES/SimBa/ZO: operate on the 32x32 grayscale image (not 224x224 RGB).
+    Use large sigma (>= 8.0) to cross integer boundaries. Combine with a warm
     start from the analytical approach above for best results.
 
 ==============================================================================
@@ -126,7 +126,7 @@ AVAILABLE IMPORTS
 Standard library and the following packages are available:
   numpy, scipy, PIL (Pillow), imagehash
 
-Do NOT import torch, tensorflow, or other deep-learning frameworks — the
+Do NOT import torch, tensorflow, or other deep-learning frameworks -- the
 evaluator runs in a CPU-only environment.
 
 ==============================================================================
