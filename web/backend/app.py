@@ -153,6 +153,11 @@ async def resume_run(config: ResumeConfig):
             redis_db=config.redis_db,
             resume=True,
         )
+        if runner._log_task:
+            try:
+                await runner._log_task
+            except Exception:
+                pass
         snapshot_manager.stop()
 
     snapshot_manager.start(config.phf, config.run_id, config.redis_port, config.redis_db)
