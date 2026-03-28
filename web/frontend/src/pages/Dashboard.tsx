@@ -327,18 +327,25 @@ export default function Dashboard() {
                 {runs.map((run: any) => (
                   <button
                     key={run.run_id}
-                    onClick={() => handleResume(run.run_id)}
-                    className="text-left p-4 rounded border border-gray-700 hover:border-brand hover:bg-brand/5 transition-all"
+                    onClick={() => run.resumable && handleResume(run.run_id)}
+                    disabled={!run.resumable}
+                    className={`text-left p-4 rounded border transition-all w-full ${
+                      run.resumable
+                        ? 'border-gray-700 hover:border-brand hover:bg-brand/5 cursor-pointer'
+                        : 'border-gray-800 opacity-50 cursor-not-allowed'
+                    }`}
                   >
                     <div className="flex justify-between items-center mb-1">
                       <span className="text-brand font-mono text-sm">{run.run_id}</span>
-                      <span className="text-gray-500 text-xs">{run.timestamp || run.last_updated || ''}</span>
+                      <span className="text-xs">
+                        {run.resumable
+                          ? <span className="text-green-400">● снапшот есть</span>
+                          : <span className="text-gray-600">нет снапшота</span>}
+                      </span>
                     </div>
                     <div className="text-xs text-gray-400">
                       {run.programs ?? 0} программ
-                      {run.total_seen ? ` | ${run.total_seen} всего видели` : ''}
-                      {run.analyzed ? ` | ${run.analyzed} проанализировано` : ''}
-                      {run.snapshot_count ? ` | ${run.snapshot_count} снапшотов` : ''}
+                      {run.bins ? ` | ${run.bins} бинов` : ''}
                     </div>
                   </button>
                 ))}

@@ -77,20 +77,6 @@ export function useMetricsHistory(phf: string) {
   return history
 }
 
-export function useAnalysis() {
-  const [data, setData] = useState<any>(null)
-
-  useEffect(() => {
-    const fetch_ = () =>
-      apiFetch('/api/analysis').then(setData).catch(() => {})
-    fetch_()
-    const id = setInterval(fetch_, 5000)
-    return () => clearInterval(id)
-  }, [])
-
-  return data
-}
-
 export function usePrograms(phf: string) {
   const [programs, setPrograms] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
