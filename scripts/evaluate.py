@@ -163,12 +163,27 @@ def _isnan(v) -> bool:
 
 
 def _save_csv(rows: list[dict], out_path: Path) -> None:
+    """Save results as CSV with column names expected by the web UI."""
     import csv
 
+    # Map internal field names to UI-expected column names
+    ui_rows = []
+    for r in rows:
+        ui_rows.append({
+            "attack": r["name"],
+            "phf": r["phf"],
+            "asr": r["asr"],
+            "l2": r["mean_l2"],
+            "efficiency": r["efficiency"],
+            "queries": r["mean_queries"],
+            "lpips": r["lpips"],
+            "time_per_attack": r["time_per_attack"],
+        })
+
     with out_path.open("w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
+        writer = csv.DictWriter(f, fieldnames=list(ui_rows[0].keys()))
         writer.writeheader()
-        writer.writerows(rows)
+        writer.writerows(ui_rows)
     print(f"\nResults saved to {out_path}")
 
 
@@ -180,7 +195,7 @@ def main() -> None:
     parser.add_argument(
         "--phf",
         required=True,
-        choices=["phash", "pdq", "neuralhash"],
+        choices=["phash", "pdq", "neuralhash", "photodna"],
         help="Target PHF.",
     )
     parser.add_argument(
@@ -201,9 +216,10 @@ def main() -> None:
         help="Number of image pairs (default: 100).",
     )
     parser.add_argument(
-        "--output-csv",
+        "--output-csv", "--csv",
         type=Path,
         metavar="FILE",
+        dest="output_csv",
         help="Save results to a CSV file.",
     )
     args = parser.parse_args()
