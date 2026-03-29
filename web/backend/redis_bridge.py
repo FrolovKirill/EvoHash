@@ -112,6 +112,10 @@ def get_latest_metrics(phf: str, redis_port: int = 6379) -> dict[str, Any]:
                 raw = client.get(key)
                 if raw:
                     data = json.loads(raw)
+                    # Skip programs that haven't been evaluated yet
+                    metrics = data.get("metrics")
+                    if not isinstance(metrics, dict) or metrics.get("efficiency") is None:
+                        continue
                     counter = data.get("atomic_counter", 0)
                     if counter > latest_counter:
                         latest_counter = counter

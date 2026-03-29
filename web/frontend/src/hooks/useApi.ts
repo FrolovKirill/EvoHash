@@ -54,7 +54,9 @@ export function useLatestMetrics(phf: string) {
 
   useEffect(() => {
     const fetch_ = () =>
-      apiFetch(`/api/metrics-latest?phf=${phf}`).then((d) => setMetrics(d.metrics)).catch(() => {})
+      apiFetch(`/api/metrics-latest?phf=${phf}`)
+        .then((d) => { if (d.metrics && d.metrics.efficiency != null) setMetrics(d.metrics) })
+        .catch(() => {})
     fetch_()
     const id = setInterval(fetch_, 2000)
     return () => clearInterval(id)
