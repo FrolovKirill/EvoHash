@@ -80,7 +80,9 @@ class _PixelState:
 
         def apply_step(step_val):
             self.delta[i, j, ch] += step_val
-            return np.clip(x0 + self.delta, 0, 255)
+            result = np.clip(x0 + self.delta, 0.0, 255.0)
+            self.delta[:] = result - x0
+            return result
 
         return key, plus_img, minus_img, apply_step
 
@@ -94,11 +96,10 @@ class _GlobalDCTState:
         self.delta = [np.zeros((H, W), dtype=np.float32) for _ in range(C)]
         self.C = C
 
-    def _build(self, x0):
-        chs = []
-        for k in range(self.C):
-            chs.append(_idct2(self.coeffs[k] + self.delta[k]).astype(np.float32))
-        return np.clip(np.stack(chs, axis=2), 0, 255)
+    def _build(self):
+        chs = [np.clip(_idct2(self.coeffs[k] + self.delta[k]), 0.0, 255.0)
+               for k in range(self.C)]
+        return np.stack(chs, axis=2).astype(np.float32)
 
     def make_probes(self, x0, rng, a):
         H, W, C = x0.shape
@@ -108,14 +109,14 @@ class _GlobalDCTState:
         old = float(self.delta[ch][fi, fj])
 
         self.delta[ch][fi, fj] = old + a
-        plus_img = self._build(x0)
+        plus_img = self._build()
         self.delta[ch][fi, fj] = old - a
-        minus_img = self._build(x0)
+        minus_img = self._build()
         self.delta[ch][fi, fj] = old
 
         def apply_step(step_val):
             self.delta[ch][fi, fj] += step_val
-            return self._build(x0)
+            return self._build()
 
         return key, plus_img, minus_img, apply_step
 
@@ -158,15 +159,28 @@ class _MidDCTState:
 
         def apply_step(step_val):
             self.delta[r0:r1, c0:c1, ch] += step_val * basis
-            return np.clip(x0 + self.delta, 0, 255)
+            result = np.clip(x0 + self.delta, 0.0, 255.0)
+            self.delta[:] = result - x0
+            return result
 
         return key, plus_img, minus_img, apply_step
 
 
+_SCALE_DEFAULTS = {
+    "pixel":  {"a": 2.0,  "n_iter": 1000},
+    "global": {"a": 50.0, "n_iter": 2000},
+    "mid":    {"a": 5.0,  "n_iter": 800},
+}
+
 def _attack_single(img, target_hash, hash_fn, threshold,
-                   scale="global", n_iter=600, lr=0.05, a=0.1,
+                   scale="global", n_iter=None, lr=0.05, a=None,
                    patch_size=None, beta1=0.9, beta2=0.999, eps=1e-8):
     """Attack one image using ATKScopes coordinate descent with Adam."""
+    defaults = _SCALE_DEFAULTS[scale]
+    if n_iter is None:
+        n_iter = defaults["n_iter"]
+    if a is None:
+        a = defaults["a"]
     orig = np.array(img).astype(np.float32)
     H, W, C = orig.shape
     k = patch_size or max(H // 4, 8)
@@ -231,8 +245,7 @@ def entrypoint(context: dict) -> dict:
 
     attacked_images, metrics = [], []
     for img, th in zip(sources, target_hashes):
-        atk, m = _attack_single(img, th, hash_fn, threshold,
-                                scale="pixel", n_iter=600, lr=0.05, a=0.1)
+        atk, m = _attack_single(img, th, hash_fn, threshold, scale="pixel")
         attacked_images.append(atk)
         metrics.append(m)
 
