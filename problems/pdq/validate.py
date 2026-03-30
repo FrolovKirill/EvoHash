@@ -5,34 +5,7 @@ from __future__ import annotations
 import numpy as np
 from PIL import Image
 
-
-# ── LPIPS model (lazy-loaded once) ───────────────────────────────────────────
-
-_lpips_fn = None
-LPIPS_WEIGHT = 50.0  # scales LPIPS (~[0,1]) to be comparable with L2 (~[20,90])
-
-
-def _get_lpips_fn():
-    global _lpips_fn
-    if _lpips_fn is None:
-        try:
-            import lpips as _lpips_mod
-            _lpips_fn = _lpips_mod.LPIPS(net="alex", verbose=False)
-        except ImportError:
-            _lpips_fn = False
-    return _lpips_fn if _lpips_fn is not False else None
-
-
-def _compute_lpips_single(orig_arr: np.ndarray, atk_arr: np.ndarray) -> float:
-    fn = _get_lpips_fn()
-    if fn is None:
-        return float("nan")
-    import torch
-    def _to_tensor(arr):
-        t = torch.from_numpy(arr.astype(np.float32) / 127.5 - 1.0)
-        return t.permute(2, 0, 1).unsqueeze(0)
-    with torch.no_grad():
-        return float(fn(_to_tensor(orig_arr), _to_tensor(atk_arr)).item())
+from evohash.efficiency import compute_efficiency, compute_lpips_single
 
 
 _SENTINEL = {
@@ -93,7 +66,7 @@ def validate(context: dict, data: dict) -> dict:
                 / np.sqrt(orig_arr.size)
             )
 
-            lp = _compute_lpips_single(orig_arr, atk_arr)
+            lp = compute_lpips_single(orig_arr, atk_arr)
 
             successes.append(success)
             l2_values.append(l2)
@@ -111,10 +84,7 @@ def validate(context: dict, data: dict) -> dict:
     mean_lpips = float(np.mean(lpips_values))
     mean_queries = float(np.mean(query_counts))
 
-    if np.isnan(mean_lpips):
-        efficiency = asr / (mean_l2 + 1e-6)
-    else:
-        efficiency = asr / (mean_l2 + LPIPS_WEIGHT * mean_lpips + 1e-6)
+    efficiency = compute_efficiency(asr, mean_l2, mean_lpips)
 
     result = {
         "is_valid": 1.0,

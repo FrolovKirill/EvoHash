@@ -1,7 +1,7 @@
 # TODO: PhotoDNA metrics — mirrors phash/metrics.yaml with threshold=3855 (L1 over 144 floats)
 specs:
   efficiency:
-    description: "Attack efficiency: ASR / (mean L2 + 50*LPIPS + eps). Higher is better."
+    description: "Attack efficiency: ASR / distortion(L2, LPIPS). Mode set via EFFICIENCY_MODE env var."
     decimals: 6
     is_primary: true
     higher_is_better: true

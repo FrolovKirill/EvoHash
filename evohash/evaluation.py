@@ -45,17 +45,10 @@ def compute_mean_l2(
     return float(np.mean(l2s)) if l2s else float("nan")
 
 
-LPIPS_WEIGHT = 50.0  # scales LPIPS (~[0,1]) to be comparable with L2 (~[20,90])
-
-
 def compute_efficiency(asr: float, mean_l2: float, mean_lpips: float = float("nan")) -> float:
-    """Primary fitness metric: ASR / (mean_L2 + λ*LPIPS + ε).
-
-    Falls back to ASR / (mean_L2 + ε) if LPIPS is unavailable (nan).
-    """
-    if np.isnan(mean_lpips):
-        return asr / (mean_l2 + 1e-6)
-    return asr / (mean_l2 + LPIPS_WEIGHT * mean_lpips + 1e-6)
+    """Primary fitness metric — delegates to ``evohash.efficiency``."""
+    from evohash.efficiency import compute_efficiency as _compute
+    return _compute(asr, mean_l2, mean_lpips)
 
 
 # ── Secondary metrics ─────────────────────────────────────────────────────────
