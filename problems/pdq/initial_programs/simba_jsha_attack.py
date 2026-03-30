@@ -27,61 +27,43 @@ def collides(arr, target_hash, hash_fn, threshold):
     return query_distance(arr, target_hash, hash_fn) <= threshold
 
 
-def _block_basis(height, width, block_h, block_w, row, col, channel):
-    basis = np.zeros((height, width, 3), dtype=np.float32)
-    r0, r1 = row, min(row + block_h, height)
-    c0, c1 = col, min(col + block_w, width)
-    basis[r0:r1, c0:c1, channel] = 1.0
-    norm = np.linalg.norm(basis)
-    if norm > 0:
-        basis /= norm
-    return basis
-
-
 def _simba_phase1(img, target_hash, hash_fn, threshold,
-                  n_iter=300, step_size=16.0, block_size=16):
-    """SimBa block basis — find collision (unconstrained, ignoring L2)."""
+                  n_iter=500, n_samples=20, sigma=80.0, lr=8.0):
+    """SimBa — find collision via batched random directions + sign update."""
     orig = np.array(img).astype(np.float32)
-    H, W, _ = orig.shape
     current = orig.copy()
+    best = orig.copy()
     best_dist = hash_fn.distance(hash_fn.compute(img), target_hash)
     n_queries = 1
 
-    row_starts = list(range(0, H, block_size))
-    col_starts = list(range(0, W, block_size))
-
-    rng = np.random.default_rng()
-    all_indices = [(r, c, ch) for r in row_starts for c in col_starts for ch in range(3)]
-    order = rng.permutation(len(all_indices))
-
-    steps_done = 0
-    for idx in order:
-        if best_dist <= threshold or steps_done >= n_iter:
+    for _ in range(n_iter):
+        if best_dist <= threshold:
             break
-        row, col, ch = all_indices[idx]
 
-        basis = _block_basis(H, W, block_size, block_size, row, col, ch)
+        grad_estimate = np.zeros_like(orig)
+        for _ in range(n_samples):
+            v = np.random.randn(*orig.shape).astype(np.float32)
+            pos = np.clip(current + sigma * v, 0, 255)
+            neg = np.clip(current - sigma * v, 0, 255)
+            d_pos = hash_fn.distance(
+                hash_fn.compute(Image.fromarray(pos.astype(np.uint8))), target_hash)
+            d_neg = hash_fn.distance(
+                hash_fn.compute(Image.fromarray(neg.astype(np.uint8))), target_hash)
+            n_queries += 2
+            grad_estimate += (d_pos - d_neg) * v
 
-        pos = np.clip(current + step_size * basis, 0, 255)
-        neg = np.clip(current - step_size * basis, 0, 255)
+        grad_estimate /= 2.0 * sigma * n_samples
+        current = np.clip(current - lr * np.sign(grad_estimate), 0, 255)
 
-        d_pos = hash_fn.distance(
-            hash_fn.compute(Image.fromarray(pos.astype(np.uint8))), target_hash)
-        d_neg = hash_fn.distance(
-            hash_fn.compute(Image.fromarray(neg.astype(np.uint8))), target_hash)
-        n_queries += 2
+        dist = hash_fn.distance(
+            hash_fn.compute(Image.fromarray(current.astype(np.uint8))), target_hash)
+        n_queries += 1
+        if dist < best_dist:
+            best_dist = dist
+            best = current.copy()
 
-        if d_pos < best_dist:
-            best_dist = d_pos
-            current = pos
-        elif d_neg < best_dist:
-            best_dist = d_neg
-            current = neg
-
-        steps_done += 1
-
-    l2 = normalised_l2(orig, current)
-    return Image.fromarray(current.astype(np.uint8)), {
+    l2 = normalised_l2(orig, best)
+    return Image.fromarray(best.astype(np.uint8)), {
         "success": best_dist <= threshold,
         "l2": l2,
         "n_queries": n_queries,
@@ -174,14 +156,14 @@ def hsja_phase(source, target, target_hash, hash_fn, threshold,
 
 
 def _attack_single(src_img, target_hash, hash_fn, threshold,
-                   p1_n_iter=300, p1_step_size=16.0, p1_block_size=16,
+                   p1_n_iter=500, p1_n_samples=20, p1_sigma=80.0, p1_lr=8.0,
                    hsja_n_iter=25, hsja_bs_steps=10, hsja_grad_samples=20):
     source = np.array(src_img).astype(np.float32)
 
     # Phase 1: SimBa finds collision
     phase1_img, phase1_metrics = _simba_phase1(
         src_img, target_hash, hash_fn, threshold,
-        n_iter=p1_n_iter, step_size=p1_step_size, block_size=p1_block_size,
+        n_iter=p1_n_iter, n_samples=p1_n_samples, sigma=p1_sigma, lr=p1_lr,
     )
     q1 = phase1_metrics["n_queries"]
     phase1_arr = np.array(phase1_img).astype(np.float32)
@@ -222,7 +204,7 @@ def entrypoint(context: dict) -> dict:
     for src, th in zip(sources, target_hashes):
         atk, m = _attack_single(
             src, th, hash_fn, threshold,
-            p1_n_iter=300, p1_step_size=16.0, p1_block_size=16,
+            p1_n_iter=500, p1_n_samples=20, p1_sigma=80.0, p1_lr=8.0,
             hsja_n_iter=25, hsja_bs_steps=10, hsja_grad_samples=20,
         )
         attacked_images.append(atk)
