@@ -45,9 +45,17 @@ def compute_mean_l2(
     return float(np.mean(l2s)) if l2s else float("nan")
 
 
-def compute_efficiency(asr: float, mean_l2: float) -> float:
-    """Primary fitness metric: ASR / (mean_L2 + ε)."""
-    return asr / (mean_l2 + 1e-6)
+LPIPS_WEIGHT = 50.0  # scales LPIPS (~[0,1]) to be comparable with L2 (~[20,90])
+
+
+def compute_efficiency(asr: float, mean_l2: float, mean_lpips: float = float("nan")) -> float:
+    """Primary fitness metric: ASR / (mean_L2 + λ*LPIPS + ε).
+
+    Falls back to ASR / (mean_L2 + ε) if LPIPS is unavailable (nan).
+    """
+    if np.isnan(mean_lpips):
+        return asr / (mean_l2 + 1e-6)
+    return asr / (mean_l2 + LPIPS_WEIGHT * mean_lpips + 1e-6)
 
 
 # ── Secondary metrics ─────────────────────────────────────────────────────────
@@ -173,9 +181,9 @@ def run_benchmark(
 
     asr = compute_asr(per_image_metrics)
     mean_l2 = compute_mean_l2(originals, attacked_arrs)
-    efficiency = compute_efficiency(asr, mean_l2)
     mean_queries = compute_mean_queries(per_image_metrics)
     lpips_score = compute_lpips(originals, attacked_arrs)
+    efficiency = compute_efficiency(asr, mean_l2, lpips_score)
     time_per_attack = elapsed / max(len(sources), 1)
 
     return {

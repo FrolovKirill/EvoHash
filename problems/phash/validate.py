@@ -10,6 +10,36 @@ import numpy as np
 from PIL import Image
 
 
+# ── LPIPS model (lazy-loaded once) ───────────────────────────────────────────
+
+_lpips_fn = None
+LPIPS_WEIGHT = 50.0  # scales LPIPS (~[0,1]) to be comparable with L2 (~[20,90])
+
+
+def _get_lpips_fn():
+    global _lpips_fn
+    if _lpips_fn is None:
+        try:
+            import lpips as _lpips_mod
+            _lpips_fn = _lpips_mod.LPIPS(net="alex", verbose=False)
+        except ImportError:
+            _lpips_fn = False  # sentinel: unavailable
+    return _lpips_fn if _lpips_fn is not False else None
+
+
+def _compute_lpips_single(orig_arr: np.ndarray, atk_arr: np.ndarray) -> float:
+    """Compute LPIPS between two HxWx3 arrays. Returns nan if unavailable."""
+    fn = _get_lpips_fn()
+    if fn is None:
+        return float("nan")
+    import torch
+    def _to_tensor(arr):
+        t = torch.from_numpy(arr.astype(np.float32) / 127.5 - 1.0)
+        return t.permute(2, 0, 1).unsqueeze(0)
+    with torch.no_grad():
+        return float(fn(_to_tensor(orig_arr), _to_tensor(atk_arr)).item())
+
+
 # ── Sentinel values (returned when a program is invalid) ─────────────────────
 
 _SENTINEL = {
@@ -17,6 +47,7 @@ _SENTINEL = {
     "efficiency": -1000.0,
     "asr": 0.0,
     "l2": 1_000_000.0,
+    "lpips": 1.0,
     "n_queries": 0.0,
     "mean_final_dist": 64.0,
 }
@@ -61,6 +92,7 @@ def validate(context: dict, data: dict) -> dict:
 
     successes: list[float] = []
     l2_values: list[float] = []
+    lpips_values: list[float] = []
     query_counts: list[float] = []
     final_dists: list[float] = []
 
@@ -84,8 +116,11 @@ def validate(context: dict, data: dict) -> dict:
                 / np.sqrt(orig_arr.size)
             )
 
+            lp = _compute_lpips_single(orig_arr, atk_arr)
+
             successes.append(success)
             l2_values.append(l2)
+            lpips_values.append(lp)
             query_counts.append(float(m.get("n_queries", 0)))
             final_dists.append(float(dist))
 
@@ -93,20 +128,28 @@ def validate(context: dict, data: dict) -> dict:
             # Any error in a single image → treat as failed attack
             successes.append(0.0)
             l2_values.append(float(np.linalg.norm(np.zeros(3)) + 1e6))
+            lpips_values.append(1.0)
             query_counts.append(0.0)
             final_dists.append(64.0)
 
     asr = float(np.mean(successes))
     mean_l2 = float(np.mean(l2_values))
+    mean_lpips = float(np.mean(lpips_values))
     mean_queries = float(np.mean(query_counts))
     mean_final_dist = float(np.mean(final_dists))
-    efficiency = asr / (mean_l2 + 1e-6)
+
+    # Combined distortion: L2 + λ*LPIPS (falls back to L2-only if LPIPS unavailable)
+    if np.isnan(mean_lpips):
+        efficiency = asr / (mean_l2 + 1e-6)
+    else:
+        efficiency = asr / (mean_l2 + LPIPS_WEIGHT * mean_lpips + 1e-6)
 
     result = {
         "is_valid": 1.0,
         "efficiency": efficiency,
         "asr": asr,
         "l2": mean_l2,
+        "lpips": mean_lpips,
         "n_queries": mean_queries,
         "mean_final_dist": mean_final_dist,
     }

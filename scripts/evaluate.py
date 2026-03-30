@@ -102,11 +102,11 @@ def evaluate_program(
 
     asr = compute_asr(per_image)
     mean_l2 = compute_mean_l2(originals, attacked_arrs)
-    efficiency = compute_efficiency(asr, mean_l2)
     mean_queries = compute_mean_queries(per_image)
 
     print("Computing LPIPS (may be slow without GPU)…")
     lpips_score = compute_lpips(originals, attacked_arrs)
+    efficiency = compute_efficiency(asr, mean_l2, lpips_score)
 
     time_per = elapsed / max(len(sources), 1)
 

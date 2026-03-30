@@ -6,11 +6,41 @@ import numpy as np
 from PIL import Image
 
 
+# ── LPIPS model (lazy-loaded once) ───────────────────────────────────────────
+
+_lpips_fn = None
+LPIPS_WEIGHT = 50.0
+
+
+def _get_lpips_fn():
+    global _lpips_fn
+    if _lpips_fn is None:
+        try:
+            import lpips as _lpips_mod
+            _lpips_fn = _lpips_mod.LPIPS(net="alex", verbose=False)
+        except ImportError:
+            _lpips_fn = False
+    return _lpips_fn if _lpips_fn is not False else None
+
+
+def _compute_lpips_single(orig_arr: np.ndarray, atk_arr: np.ndarray) -> float:
+    fn = _get_lpips_fn()
+    if fn is None:
+        return float("nan")
+    import torch
+    def _to_tensor(arr):
+        t = torch.from_numpy(arr.astype(np.float32) / 127.5 - 1.0)
+        return t.permute(2, 0, 1).unsqueeze(0)
+    with torch.no_grad():
+        return float(fn(_to_tensor(orig_arr), _to_tensor(atk_arr)).item())
+
+
 _SENTINEL = {
     "is_valid": 0.0,
     "efficiency": -1000.0,
     "asr": 0.0,
     "l2": 1_000_000.0,
+    "lpips": 1.0,
     "n_queries": 0.0,
     "mean_final_dist": 3855.0,
 }
@@ -34,6 +64,7 @@ def validate(context: dict, data: dict) -> dict:
 
     successes: list[float] = []
     l2_values: list[float] = []
+    lpips_values: list[float] = []
     query_counts: list[float] = []
     final_dists: list[float] = []
 
@@ -55,28 +86,38 @@ def validate(context: dict, data: dict) -> dict:
                 / np.sqrt(orig_arr.size)
             )
 
+            lp = _compute_lpips_single(orig_arr, atk_arr)
+
             successes.append(success)
             l2_values.append(l2)
+            lpips_values.append(lp)
             query_counts.append(float(m.get("n_queries", 0)))
             final_dists.append(float(dist))
 
         except Exception:
             successes.append(0.0)
             l2_values.append(1e6)
+            lpips_values.append(1.0)
             query_counts.append(0.0)
             final_dists.append(3855.0)
 
     asr = float(np.mean(successes))
     mean_l2 = float(np.mean(l2_values))
+    mean_lpips = float(np.mean(lpips_values))
     mean_queries = float(np.mean(query_counts))
     mean_final_dist = float(np.mean(final_dists))
-    efficiency = asr / (mean_l2 + 1e-6)
+
+    if np.isnan(mean_lpips):
+        efficiency = asr / (mean_l2 + 1e-6)
+    else:
+        efficiency = asr / (mean_l2 + LPIPS_WEIGHT * mean_lpips + 1e-6)
 
     result = {
         "is_valid": 1.0,
         "efficiency": efficiency,
         "asr": asr,
         "l2": mean_l2,
+        "lpips": mean_lpips,
         "n_queries": mean_queries,
         "mean_final_dist": mean_final_dist,
     }
