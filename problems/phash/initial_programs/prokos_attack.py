@@ -33,7 +33,7 @@ def _frequency_weight_mask(h, w, cutoff_ratio=0.35):
 
 
 def _attack_single(img, target_hash, hash_fn, threshold,
-                   n_iter=120, n_freq_samples=25, lr=5.0, sigma=3.0,
+                   n_iter=800, n_freq_samples=25, lr=8.0, sigma=80.0,
                    momentum=0.5):
     orig = np.array(img).astype(np.float32)
     H, W, C = orig.shape
@@ -80,12 +80,8 @@ def _attack_single(img, target_hash, hash_fn, threshold,
         for c in range(C):
             grad_spatial[:, :, c] = idctn(grad_dct[:, :, c], type=2, norm="ortho")
 
-        grad_norm = np.linalg.norm(grad_spatial.flatten())
-        if grad_norm > 1e-12:
-            grad_spatial /= grad_norm
-
         momentum_buf = momentum * momentum_buf + (1.0 - momentum) * grad_spatial
-        current = np.clip(current - lr * momentum_buf, 0, 255)
+        current = np.clip(current - lr * np.sign(momentum_buf), 0, 255)
 
         dist = hash_fn.distance(
             hash_fn.compute(Image.fromarray(current.astype(np.uint8))), target_hash)
@@ -112,7 +108,7 @@ def entrypoint(context: dict) -> dict:
     attacked_images, metrics = [], []
     for img, th in zip(sources, target_hashes):
         atk, m = _attack_single(img, th, hash_fn, threshold,
-                                n_iter=120, n_freq_samples=25, lr=5.0, sigma=3.0)
+                                n_iter=800, n_freq_samples=25, lr=8.0, sigma=80.0)
         attacked_images.append(atk)
         metrics.append(m)
 

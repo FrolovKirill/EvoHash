@@ -16,7 +16,7 @@ def normalised_l2(original, perturbed):
 
 
 def _attack_single(img, target_hash, hash_fn, threshold,
-                   n_iter=150, n_samples=20, sigma=6.0, lr=3.0):
+                   n_iter=800, n_samples=20, sigma=80.0, lr=8.0):
     orig = np.array(img).astype(np.float32)
     current = orig.copy()
     best = orig.copy()
@@ -48,7 +48,7 @@ def _attack_single(img, target_hash, hash_fn, threshold,
             grad_estimate += (d_pos - d_neg) * v
 
         grad_estimate /= 2.0 * sigma * n_samples
-        current = np.clip(current - lr * grad_estimate, 0, 255)
+        current = np.clip(current - lr * np.sign(grad_estimate), 0, 255)
 
         dist = hash_fn.distance(
             hash_fn.compute(Image.fromarray(current.astype(np.uint8))),
@@ -77,7 +77,7 @@ def entrypoint(context: dict) -> dict:
     attacked_images, metrics = [], []
     for img, th in zip(sources, target_hashes):
         atk, m = _attack_single(img, th, hash_fn, threshold,
-                                n_iter=150, n_samples=20, sigma=6.0, lr=3.0)
+                                n_iter=800, n_samples=20, sigma=80.0, lr=8.0)
         attacked_images.append(atk)
         metrics.append(m)
 

@@ -1,7 +1,8 @@
-"""SimBa (Simple Black-box Adversarial) attack — DCT basis variant.
+"""SimBa (Simple Black-box Adversarial) attack — random direction variant.
 
-Coordinate descent using DCT basis vectors: tries +/- step along each
-basis direction, keeps the one that reduces hash distance.
+Estimates gradient via batched random directions with antithetic sampling,
+then applies sign-based update. Uses random Gaussian directions instead of
+DCT basis for better coverage of hash function's sensitivity space.
 
 Reference: Guo et al., ICML 2019.
 """
@@ -15,66 +16,45 @@ def normalised_l2(original, perturbed):
     return float(np.linalg.norm(diff.flatten()) / np.sqrt(original.size))
 
 
-def _dct_basis(height, width, k, c):
-    """Return the k-th 2D DCT basis vector for shape (H, W, 3), channel c."""
-    pairs = [(u, v) for u in range(height) for v in range(width)]
-    pairs.sort(key=lambda uv: uv[0] ** 2 + uv[1] ** 2)
-    u, v = pairs[k % len(pairs)]
-
-    rows = np.arange(height).reshape(-1, 1)
-    cols = np.arange(width).reshape(1, -1)
-    basis_2d = np.cos(np.pi * u * (2 * rows + 1) / (2 * height)) * \
-               np.cos(np.pi * v * (2 * cols + 1) / (2 * width))
-    norm = np.linalg.norm(basis_2d)
-    if norm > 0:
-        basis_2d /= norm
-
-    basis = np.zeros((height, width, 3), dtype=np.float32)
-    basis[:, :, c] = basis_2d
-    return basis
-
-
 def _attack_single(img, target_hash, hash_fn, threshold,
-                   n_iter=200, step_size=12.0):
-    """SimBa with DCT basis -- deterministic permutation without replacement."""
+                   n_iter=800, n_samples=20, sigma=80.0, lr=8.0):
+    """SimBa with random direction gradient estimation and sign-based update."""
     orig = np.array(img).astype(np.float32)
-    H, W, _ = orig.shape
     current = orig.copy()
+    best = orig.copy()
     best_dist = hash_fn.distance(hash_fn.compute(img), target_hash)
     n_queries = 1
 
-    rng = np.random.default_rng()
-    max_basis = H * W
-    all_indices = [(k, c) for c in range(3) for k in range(max_basis)]
-    order = rng.permutation(len(all_indices))
-
-    steps_done = 0
-    for idx in order:
-        if best_dist <= threshold or steps_done >= n_iter:
+    for _ in range(n_iter):
+        if best_dist <= threshold:
             break
-        k, c = all_indices[idx]
-        basis = _dct_basis(H, W, k, c)
 
-        pos = np.clip(current + step_size * basis, 0, 255)
-        neg = np.clip(current - step_size * basis, 0, 255)
+        grad_estimate = np.zeros_like(orig)
+        for _ in range(n_samples):
+            v = np.random.randn(*orig.shape).astype(np.float32)
+            pos = np.clip(current + sigma * v, 0, 255)
+            neg = np.clip(current - sigma * v, 0, 255)
 
-        d_pos = hash_fn.distance(
-            hash_fn.compute(Image.fromarray(pos.astype(np.uint8))), target_hash)
-        d_neg = hash_fn.distance(
-            hash_fn.compute(Image.fromarray(neg.astype(np.uint8))), target_hash)
-        n_queries += 2
+            d_pos = hash_fn.distance(
+                hash_fn.compute(Image.fromarray(pos.astype(np.uint8))), target_hash)
+            d_neg = hash_fn.distance(
+                hash_fn.compute(Image.fromarray(neg.astype(np.uint8))), target_hash)
+            n_queries += 2
 
-        if d_pos < best_dist:
-            best_dist = d_pos
-            current = pos
-        elif d_neg < best_dist:
-            best_dist = d_neg
-            current = neg
+            grad_estimate += (d_pos - d_neg) * v
 
-        steps_done += 1
+        grad_estimate /= 2.0 * sigma * n_samples
+        current = np.clip(current - lr * np.sign(grad_estimate), 0, 255)
 
-    l2 = normalised_l2(orig, current)
-    return Image.fromarray(current.astype(np.uint8)), {
+        dist = hash_fn.distance(
+            hash_fn.compute(Image.fromarray(current.astype(np.uint8))), target_hash)
+        n_queries += 1
+        if dist < best_dist:
+            best_dist = dist
+            best = current.copy()
+
+    l2 = normalised_l2(orig, best)
+    return Image.fromarray(best.astype(np.uint8)), {
         "success": best_dist <= threshold,
         "l2": l2,
         "n_queries": n_queries,
@@ -91,7 +71,7 @@ def entrypoint(context: dict) -> dict:
     attacked_images, metrics = [], []
     for img, th in zip(sources, target_hashes):
         atk, m = _attack_single(img, th, hash_fn, threshold,
-                                n_iter=200, step_size=12.0)
+                                n_iter=800, n_samples=20, sigma=80.0, lr=8.0)
         attacked_images.append(atk)
         metrics.append(m)
 
