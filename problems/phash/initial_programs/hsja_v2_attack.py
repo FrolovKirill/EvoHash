@@ -39,13 +39,17 @@ def _binary_search(source, colliding, target_hash, hash_fn, threshold, steps=10)
 
 
 def _find_initial_collision(source, target_hash, hash_fn, threshold,
-                            max_tries=200, sigmas=(10, 25, 50, 100, 200)):
-    """Find any colliding point by adding Gaussian noise with increasing sigma."""
+                            max_tries=2000, sigmas=(50, 100, 200, 500)):
+    """Find any colliding point by adding Gaussian noise with increasing sigma.
+
+    If random noise fails, fall back to ZO-SignSGD to force a collision.
+    """
     n_queries = 0
     shape = source.shape
 
+    # Phase 1: try random noise
     for sigma in sigmas:
-        tries_per_sigma = max(1, max_tries // len(sigmas))
+        tries_per_sigma = max(1, max_tries // (2 * len(sigmas)))
         for _ in range(tries_per_sigma):
             noise = np.random.randn(*shape).astype(np.float32) * sigma
             candidate = np.clip(source + noise, 0, 255)
@@ -53,11 +57,37 @@ def _find_initial_collision(source, target_hash, hash_fn, threshold,
             if collides(candidate, target_hash, hash_fn, threshold):
                 return candidate, n_queries
 
-    for _ in range(max(20, max_tries // 4)):
+    # Phase 1b: try fully random images
+    for _ in range(max(50, max_tries // 4)):
         candidate = np.random.randint(0, 256, size=shape).astype(np.float32)
         n_queries += 1
         if collides(candidate, target_hash, hash_fn, threshold):
             return candidate, n_queries
+
+    # Phase 2: ZO-SignSGD fallback to force collision
+    current = source.copy()
+    best_dist = query_distance(source, target_hash, hash_fn)
+    n_queries += 1
+    for _ in range(500):
+        if best_dist <= threshold:
+            return current, n_queries
+        grad = np.zeros_like(source)
+        for _ in range(20):
+            u = np.random.randn(*shape).astype(np.float32)
+            pos = np.clip(current + 80.0 * u, 0, 255)
+            neg = np.clip(current - 80.0 * u, 0, 255)
+            d_pos = query_distance(pos, target_hash, hash_fn)
+            d_neg = query_distance(neg, target_hash, hash_fn)
+            n_queries += 2
+            grad += (d_pos - d_neg) * u
+        grad /= 2.0 * 80.0 * 20
+        current = np.clip(current - 8.0 * np.sign(grad), 0, 255)
+        dist = query_distance(current, target_hash, hash_fn)
+        n_queries += 1
+        if dist < best_dist:
+            best_dist = dist
+            if dist <= threshold:
+                return current, n_queries
 
     return None, n_queries
 

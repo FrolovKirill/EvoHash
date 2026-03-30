@@ -26,7 +26,7 @@ def collides(arr, target_hash, hash_fn, threshold):
 
 
 def _zo_phase1(img, target_hash, hash_fn, threshold,
-               n_iter=150, n_samples=20, mu=5.0, lr=1.5):
+               n_iter=800, n_samples=20, mu=80.0, lr=8.0):
     """ZO-SignSGD — find collision (unconstrained, ignoring L2)."""
     orig = np.array(img).astype(np.float32)
     current = orig.copy()
@@ -156,7 +156,7 @@ def hsja_phase(source, target, target_hash, hash_fn, threshold,
 
 
 def _attack_single(src_img, target_hash, hash_fn, threshold,
-                   p1_n_iter=150, p1_n_samples=20, p1_mu=5.0, p1_lr=1.5,
+                   p1_n_iter=800, p1_n_samples=20, p1_mu=80.0, p1_lr=8.0,
                    hsja_n_iter=25, hsja_bs_steps=10, hsja_grad_samples=20):
     source = np.array(src_img).astype(np.float32)
 
@@ -204,7 +204,7 @@ def entrypoint(context: dict) -> dict:
     for src, th in zip(sources, target_hashes):
         atk, m = _attack_single(
             src, th, hash_fn, threshold,
-            p1_n_iter=150, p1_n_samples=20, p1_mu=5.0, p1_lr=1.5,
+            p1_n_iter=800, p1_n_samples=20, p1_mu=80.0, p1_lr=8.0,
             hsja_n_iter=25, hsja_bs_steps=10, hsja_grad_samples=20,
         )
         attacked_images.append(atk)

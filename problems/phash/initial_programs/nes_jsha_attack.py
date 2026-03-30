@@ -26,7 +26,7 @@ def collides(arr, target_hash, hash_fn, threshold):
 
 
 def _nes_phase1(img, target_hash, hash_fn, threshold,
-                n_iter=150, n_samples=20, sigma=6.0, lr=3.0):
+                n_iter=800, n_samples=20, sigma=80.0, lr=8.0):
     """NES attack — find collision (unconstrained, ignoring L2)."""
     orig = np.array(img).astype(np.float32)
     current = orig.copy()
@@ -57,7 +57,7 @@ def _nes_phase1(img, target_hash, hash_fn, threshold,
             grad_estimate += (d_pos - d_neg) * v
 
         grad_estimate /= 2.0 * sigma * n_samples
-        current = np.clip(current - lr * grad_estimate, 0, 255)
+        current = np.clip(current - lr * np.sign(grad_estimate), 0, 255)
 
         dist = hash_fn.distance(
             hash_fn.compute(Image.fromarray(current.astype(np.uint8))), target_hash
@@ -161,7 +161,7 @@ def hsja_phase(source, target, target_hash, hash_fn, threshold,
 
 
 def _attack_single(src_img, target_hash, hash_fn, threshold,
-                   p1_n_iter=150, p1_n_samples=20, p1_sigma=6.0, p1_lr=3.0,
+                   p1_n_iter=800, p1_n_samples=20, p1_sigma=80.0, p1_lr=8.0,
                    hsja_n_iter=25, hsja_bs_steps=10, hsja_grad_samples=20):
     source = np.array(src_img).astype(np.float32)
 
@@ -209,7 +209,7 @@ def entrypoint(context: dict) -> dict:
     for src, th in zip(sources, target_hashes):
         atk, m = _attack_single(
             src, th, hash_fn, threshold,
-            p1_n_iter=150, p1_n_samples=20, p1_sigma=6.0, p1_lr=3.0,
+            p1_n_iter=800, p1_n_samples=20, p1_sigma=80.0, p1_lr=8.0,
             hsja_n_iter=25, hsja_bs_steps=10, hsja_grad_samples=20,
         )
         attacked_images.append(atk)
