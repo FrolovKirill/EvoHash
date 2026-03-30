@@ -72,7 +72,7 @@ def entrypoint(context: dict) -> dict:
     attacked_images, metrics = [], []
     for img, th in zip(sources, target_hashes):
         atk, m = _attack_single(img, th, hash_fn, threshold,
-                                n_iter=150, n_samples=20, mu=5.0, lr=1.5)
+                                n_iter=500, n_samples=30, mu=100.0, lr=10.0)
         attacked_images.append(atk)
         metrics.append(m)
 

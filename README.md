@@ -98,6 +98,7 @@ EvoHash/
 ├── scripts/
 │   ├── download_dataset.py     # Download ImageNet Val subset
 │   ├── evaluate.py             # Full benchmark evaluation
+│   ├── hyperparam_sweep.py     # Hyperparameter grid search for attacks
 │   └── show_best.py            # Dump best evolved programs from Redis
 └── data/imagenet_val/          # Images (gitignored, populated by download script)
 ```
@@ -131,6 +132,32 @@ Flags: `--port PORT`, `--no-browser`, `--dev` (hot-reload).
 ### CLI
 
 See [QUICKSTART.md](QUICKSTART.md) for the full manual setup.
+
+### Hyperparameter Sweep
+
+Search for working hyperparameter configurations for gradient-based attacks:
+
+```bash
+# Sweep all attacks on pHash with 3 image pairs (fast, ~10 min)
+python scripts/hyperparam_sweep.py --phf phash --n-pairs 3
+
+# Sweep on PDQ with 10 pairs (slower, more reliable)
+python scripts/hyperparam_sweep.py --phf pdq --n-pairs 10
+```
+
+Results are saved incrementally to `results_hyperparam_sweep.csv` (append mode, safe to interrupt) with detailed per-pair logs in `hyperparam_sweep.log`. The sweep covers NES, SimBa, ZO-Sign-SGD, Prokos, and ATKScopes with multiple configurations per attack.
+
+### Baseline Evaluation
+
+Evaluate all seed attack programs for a given PHF:
+
+```bash
+# Evaluate all seeds for pHash, save results for the web UI
+python scripts/evaluate.py --phf phash --all-seeds --csv results_baselines.csv
+
+# Evaluate a single program
+python scripts/evaluate.py --phf pdq --program problems/pdq/initial_programs/hsja_attack.py --n-pairs 10
+```
 
 ## Evaluation Metrics
 
