@@ -61,33 +61,50 @@ def init_run(phf_name: str, threshold: int, n_pairs: int) -> str:
 
     Call once from build_context().  Safe to call multiple times — subsequent
     calls are no-ops if a run is already active.
+    
+    If WandB initialization fails (e.g., invalid API key, network issues),
+    it will be disabled and a dummy run ID will be returned.
     """
     import time
     import wandb
+    import os
 
     if wandb.run is not None:
         return wandb.run.id
 
     _ensure_wandb_key()
 
-    import os
     ts = time.strftime("%Y-%m-%d %H:%M")
     project = os.environ.get("WANDB_PROJECT", "evohash")
-    mode = "disabled" if not os.environ.get("WANDB_API_KEY") else None
-    run = wandb.init(
-        project=project,
-        group=phf_name,
-        name=f"{phf_name} {ts}",
-        tags=[phf_name],
-        config={
-            "phf": phf_name,
-            "threshold": threshold,
-            "n_pairs_eval": n_pairs,
-        },
-        resume="allow",  # reconnect to WANDB_RUN_ID if already set by run_evohash.py
-        mode=mode,
-    )
-    return run.id
+    
+    # Check if WANDB_API_KEY is set and valid (not empty, not placeholder)
+    wandb_key = os.environ.get("WANDB_API_KEY", "").strip()
+    mode = "disabled" if not wandb_key or wandb_key == "your_key_here" else None
+    
+    try:
+        run = wandb.init(
+            project=project,
+            group=phf_name,
+            name=f"{phf_name} {ts}",
+            tags=[phf_name],
+            config={
+                "phf": phf_name,
+                "threshold": threshold,
+                "n_pairs_eval": n_pairs,
+            },
+            resume="allow",  # reconnect to WANDB_RUN_ID if already set by run_evohash.py
+            mode=mode,
+        )
+        return run.id if run else f"local-{phf_name}-{int(time.time())}"
+    except Exception as e:
+        # If WandB fails (403, network error, etc.), disable it and continue
+        print(f"Warning: WandB initialization failed ({type(e).__name__}: {e}). Continuing without WandB logging.")
+        try:
+            # Force disable WandB for this session
+            wandb.init(mode="disabled")
+        except Exception:
+            pass
+        return f"local-{phf_name}-{int(time.time())}"
 
 
 def log_initial_programs(program_dir: Any) -> None:
