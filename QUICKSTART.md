@@ -11,24 +11,44 @@ The web interface runs the entire pipeline with one button press: it handles dat
 pip install -r requirements.txt
 pip install -r web/backend/requirements.txt
 
-# 2. Clone GigaEvo (required)
+# 2. Clone GigaEvo and apply required patches
 git clone https://github.com/FusionBrainLab/gigaevo-core gigaevo-core
 pip install -e gigaevo-core/
 
-# 3. Copy and fill in your API key
+# 3. Patch gigaevo-core (two small changes required for EvoHash)
+#    a) Reduce MAP-Elites grid resolution (150 → 20) for faster convergence:
+sed -i.bak 's/primary_resolution: 150/primary_resolution: 20/' gigaevo-core/config/constants/islands.yaml && rm gigaevo-core/config/constants/islands.yaml.bak
+#    b) Relax lineage insight limit (5 → 8) to avoid LLM validation errors:
+sed -i.bak 's/max_length=5/max_length=8/' gigaevo-core/gigaevo/llm/agents/lineage.py && rm gigaevo-core/gigaevo/llm/agents/lineage.py.bak
+
+# 4. Copy and fill in your API key
 cp .env.example .env
 # edit .env → set OPENROUTER_API_KEY
 
-# 4. Start Redis
+# 5. Start Redis
 redis-server --daemonize yes
 
-# 5. Launch
+# 6. Launch
 python web/run_web.py
 # → opens http://localhost:8765
 ```
 
 > `run_web.py` auto-installs backend pip deps and runs `npm install && npm run build` on first launch.
 > Use `--port PORT` to change the default port, `--no-browser` to suppress auto-open, `--dev` for hot-reload.
+
+#### Building the frontend manually
+
+If auto-build fails or you want to work on the frontend:
+
+```bash
+cd web/frontend
+npm install          # install React/Vite/Tailwind dependencies
+npm run build        # production build → web/frontend/dist/
+npm run dev          # OR: dev server with hot-reload (port 5173)
+```
+
+The production build is served by the FastAPI backend. In dev mode (`--dev` flag or `npm run dev`),
+Vite proxies API requests to `http://localhost:8765`.
 
 ### Web UI pages
 
@@ -109,7 +129,7 @@ The backend exposes a REST API at `http://localhost:8765/api/`. Interactive docs
 
 ```bash
 # Clone EvoHash
-git clone <your-repo-url> EvoHash
+git clone https://github.com/FrolovKirill/EvoHash EvoHash
 cd EvoHash
 
 # Clone GigaEvo into gigaevo-core/ and install as editable
@@ -117,6 +137,12 @@ cd EvoHash
 #  pip install gigaevo alone is not enough because run.py and config/ are not published to PyPI)
 git clone https://github.com/FusionBrainLab/gigaevo-core gigaevo-core
 pip install -e gigaevo-core/
+
+# Patch gigaevo-core (two small changes required for EvoHash):
+#   1. Reduce MAP-Elites grid resolution (150 → 20) — needed for the attack search space
+sed -i.bak 's/primary_resolution: 150/primary_resolution: 20/' gigaevo-core/config/constants/islands.yaml && rm gigaevo-core/config/constants/islands.yaml.bak
+#   2. Relax lineage insight limit (5 → 8) — prevents LLM validation errors
+sed -i.bak 's/max_length=5/max_length=8/' gigaevo-core/gigaevo/llm/agents/lineage.py && rm gigaevo-core/gigaevo/llm/agents/lineage.py.bak
 
 # Install EvoHash dependencies
 pip install -r requirements.txt

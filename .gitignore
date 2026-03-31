@@ -59,6 +59,7 @@ wandb/
 
 # Redis dump
 dump.rdb
+*.rdb
 
 # Run logs
 *.log
@@ -69,3 +70,13 @@ web/frontend/dist/
 
 # Web UI generated assets
 web/backend/static/
+
+# Generated result artifacts
+results_visualization/
+results_atkscopes_*.csv
+results_baselines_*.csv
+results_hyperparam_sweep.csv
+evolved_*.json
+
+# Experimental / scratch (not part of the project)
+evohash_denis/
